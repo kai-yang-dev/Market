@@ -3,9 +3,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 import { authApi } from '../services/api';
+import { useAppDispatch } from '../store/hooks';
+import { setCredentials } from '../store/slices/authSlice';
 
 function SignUp() {
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
   const [searchParams] = useSearchParams();
   const [currentStep, setCurrentStep] = useState(1);
   const [userId, setUserId] = useState<string | null>(null);
@@ -154,8 +157,7 @@ function SignUp() {
 
     try {
       const response = await authApi.signUpStep7(userId, step7Data);
-      localStorage.setItem('accessToken', response.accessToken);
-      localStorage.setItem('user', JSON.stringify(response.user));
+      dispatch(setCredentials({ user: response.user, accessToken: response.accessToken }));
       navigate('/');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Invalid verification code');
@@ -168,16 +170,20 @@ function SignUp() {
     switch (currentStep) {
       case 1:
         return (
-          <form onSubmit={handleStep1} className="space-y-4">
-            <h2 className="text-2xl font-bold text-white mb-4">Step 1: Create Account</h2>
+          <form onSubmit={handleStep1} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Email
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Create Your Account</h2>
+              <p className="text-gray-600">Start your journey with us</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Email Address
               </label>
               <input
                 type="email"
                 required
-                className="w-full px-3 py-2 border border-gray-700 bg-gray-800 text-white rounded-md focus:outline-none focus:ring-indigo-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                placeholder="Enter your email"
                 value={step1Data.email}
                 onChange={(e) =>
                   setStep1Data({ ...step1Data, email: e.target.value })
@@ -185,14 +191,15 @@ function SignUp() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Password
               </label>
               <input
                 type="password"
                 required
                 minLength={8}
-                className="w-full px-3 py-2 border border-gray-700 bg-gray-800 text-white rounded-md focus:outline-none focus:ring-indigo-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                placeholder="Create a password (min. 8 characters)"
                 value={step1Data.password}
                 onChange={(e) =>
                   setStep1Data({ ...step1Data, password: e.target.value })
@@ -200,14 +207,15 @@ function SignUp() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Confirm Password
               </label>
               <input
                 type="password"
                 required
                 minLength={8}
-                className="w-full px-3 py-2 border border-gray-700 bg-gray-800 text-white rounded-md focus:outline-none focus:ring-indigo-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                placeholder="Confirm your password"
                 value={step1Data.repassword}
                 onChange={(e) =>
                   setStep1Data({ ...step1Data, repassword: e.target.value })
@@ -217,7 +225,7 @@ function SignUp() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2 px-4 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+              className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
             >
               {loading ? 'Processing...' : 'Continue'}
             </button>
@@ -226,49 +234,63 @@ function SignUp() {
 
       case 2:
         return (
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-white mb-4">Step 2: Verify Your Email</h2>
-            <p className="text-gray-300 mb-4">
-              We've sent a verification link to <strong>{step1Data.email}</strong>
+          <div className="text-center py-8">
+            <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Check Your Email</h2>
+            <p className="text-gray-600 mb-2">
+              We've sent a verification link to
             </p>
-            <p className="text-gray-400 text-sm">
+            <p className="text-blue-600 font-semibold mb-6">{step1Data.email}</p>
+            <p className="text-gray-500 text-sm mb-4">
               Please check your email and click the verification link to continue.
             </p>
-            <p className="text-gray-400 text-sm mt-4">
-              If you didn't receive the email, check your spam folder.
+            <p className="text-gray-400 text-xs">
+              Didn't receive the email? Check your spam folder.
             </p>
           </div>
         );
 
       case 3:
         return (
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-white mb-4">Step 3: Email Verified</h2>
-            <p className="text-gray-300 mb-4">
+          <div className="text-center py-8">
+            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Email Verified!</h2>
+            <p className="text-gray-600 mb-6">
               Your email has been verified successfully!
             </p>
             <button
               onClick={() => setCurrentStep(4)}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+              className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl"
             >
-              Continue to Next Step
+              Continue to Profile Setup
             </button>
           </div>
         );
 
       case 4:
         return (
-          <form onSubmit={handleStep4} className="space-y-4">
-            <h2 className="text-2xl font-bold text-white mb-4">Step 4: Personal Information</h2>
+          <form onSubmit={handleStep4} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Personal Information</h2>
+              <p className="text-gray-600">Tell us about yourself</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Username *
               </label>
               <input
                 type="text"
                 required
                 minLength={3}
-                className="w-full px-3 py-2 border border-gray-700 bg-gray-800 text-white rounded-md focus:outline-none focus:ring-indigo-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                 value={step4Data.userName}
                 onChange={(e) =>
                   setStep4Data({ ...step4Data, userName: e.target.value })
@@ -276,13 +298,13 @@ function SignUp() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 First Name *
               </label>
               <input
                 type="text"
                 required
-                className="w-full px-3 py-2 border border-gray-700 bg-gray-800 text-white rounded-md focus:outline-none focus:ring-indigo-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                 value={step4Data.firstName}
                 onChange={(e) =>
                   setStep4Data({ ...step4Data, firstName: e.target.value })
@@ -290,13 +312,13 @@ function SignUp() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Last Name *
               </label>
               <input
                 type="text"
                 required
-                className="w-full px-3 py-2 border border-gray-700 bg-gray-800 text-white rounded-md focus:outline-none focus:ring-indigo-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                 value={step4Data.lastName}
                 onChange={(e) =>
                   setStep4Data({ ...step4Data, lastName: e.target.value })
@@ -304,12 +326,12 @@ function SignUp() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Middle Name (Optional)
               </label>
               <input
                 type="text"
-                className="w-full px-3 py-2 border border-gray-700 bg-gray-800 text-white rounded-md focus:outline-none focus:ring-indigo-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                 value={step4Data.middleName}
                 onChange={(e) =>
                   setStep4Data({ ...step4Data, middleName: e.target.value })
@@ -319,7 +341,7 @@ function SignUp() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2 px-4 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+              className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
             >
               {loading ? 'Saving...' : 'Continue'}
             </button>
@@ -329,15 +351,15 @@ function SignUp() {
       case 5:
         return (
           <form onSubmit={handleStep5} className="space-y-4">
-            <h2 className="text-2xl font-bold text-white mb-4">Step 5: Address</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Step 5: Address</h2>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Street *
               </label>
               <input
                 type="text"
                 required
-                className="w-full px-3 py-2 border border-gray-700 bg-gray-800 text-white rounded-md focus:outline-none focus:ring-indigo-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                 value={step5Data.street}
                 onChange={(e) =>
                   setStep5Data({ ...step5Data, street: e.target.value })
@@ -345,13 +367,13 @@ function SignUp() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 City *
               </label>
               <input
                 type="text"
                 required
-                className="w-full px-3 py-2 border border-gray-700 bg-gray-800 text-white rounded-md focus:outline-none focus:ring-indigo-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                 value={step5Data.city}
                 onChange={(e) =>
                   setStep5Data({ ...step5Data, city: e.target.value })
@@ -359,13 +381,13 @@ function SignUp() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Country *
               </label>
               <input
                 type="text"
                 required
-                className="w-full px-3 py-2 border border-gray-700 bg-gray-800 text-white rounded-md focus:outline-none focus:ring-indigo-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                 value={step5Data.country}
                 onChange={(e) =>
                   setStep5Data({ ...step5Data, country: e.target.value })
@@ -375,7 +397,7 @@ function SignUp() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2 px-4 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+              className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
             >
               {loading ? 'Saving...' : 'Continue'}
             </button>
@@ -385,9 +407,9 @@ function SignUp() {
       case 6:
         return (
           <form onSubmit={handleStep6} className="space-y-4">
-            <h2 className="text-2xl font-bold text-white mb-4">Step 6: Phone Number</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Step 6: Phone Number</h2>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Phone Number *
               </label>
               <PhoneInput
@@ -426,7 +448,7 @@ function SignUp() {
             <button
               type="submit"
               disabled={loading || !step6Data.phoneNumber}
-              className="w-full py-2 px-4 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+              className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
             >
               {loading ? 'Sending Code...' : 'Send Verification Code'}
             </button>
@@ -436,12 +458,12 @@ function SignUp() {
       case 7:
         return (
           <form onSubmit={handleStep7} className="space-y-4">
-            <h2 className="text-2xl font-bold text-white mb-4">Step 7: Verify Phone Number</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Step 7: Verify Phone Number</h2>
             <p className="text-gray-300 mb-4">
               We've sent a verification code to <strong>{step6Data.phoneNumber}</strong>
             </p>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Verification Code *
               </label>
               <input
@@ -449,7 +471,7 @@ function SignUp() {
                 required
                 pattern="[0-9]{6}"
                 maxLength={6}
-                className="w-full px-3 py-2 border border-gray-700 bg-gray-800 text-white rounded-md focus:outline-none focus:ring-indigo-500 text-center text-2xl tracking-widest"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-center text-2xl tracking-widest"
                 placeholder="000000"
                 value={step7Data.verificationCode}
                 onChange={(e) =>
@@ -463,7 +485,7 @@ function SignUp() {
             <button
               type="submit"
               disabled={loading || step7Data.verificationCode.length !== 6}
-              className="w-full py-2 px-4 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+              className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
             >
               {loading ? 'Verifying...' : 'Verify & Complete Registration'}
             </button>
@@ -475,36 +497,75 @@ function SignUp() {
     }
   };
 
+  const steps = [
+    { number: 1, title: 'Account' },
+    { number: 2, title: 'Verify' },
+    { number: 3, title: 'Confirmed' },
+    { number: 4, title: 'Profile' },
+    { number: 5, title: 'Address' },
+    { number: 6, title: 'Phone' },
+    { number: 7, title: 'Complete' },
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-white">
-            Create your account
-          </h2>
-          <div className="mt-4 flex justify-center">
-            <div className="flex space-x-2">
-              {[1, 2, 3, 4, 5, 6, 7].map((step) => (
-                <div
-                  key={step}
-                  className={`h-2 w-2 rounded-full ${
-                    step <= currentStep
-                      ? 'bg-indigo-600'
-                      : 'bg-gray-600'
-                  }`}
-                />
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-2xl w-full">
+        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-8 py-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center">
+                <span className="text-blue-600 font-bold text-xl">M</span>
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-white">Create Your Account</h2>
+                <p className="text-blue-100 text-sm">Join thousands of professionals</p>
+              </div>
+            </div>
+            
+            {/* Progress Steps */}
+            <div className="flex items-center justify-between mt-6">
+              {steps.map((step, index) => (
+                <div key={step.number} className="flex items-center flex-1">
+                  <div className="flex flex-col items-center flex-1">
+                    <div
+                      className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm transition-all ${
+                        currentStep >= step.number
+                          ? 'bg-white text-blue-600'
+                          : 'bg-white/20 text-white'
+                      }`}
+                    >
+                      {currentStep > step.number ? '✓' : step.number}
+                    </div>
+                    <span className={`text-xs mt-2 ${currentStep >= step.number ? 'text-white' : 'text-blue-200'}`}>
+                      {step.title}
+                    </span>
+                  </div>
+                  {index < steps.length - 1 && (
+                    <div
+                      className={`h-1 flex-1 mx-2 rounded ${
+                        currentStep > step.number ? 'bg-white' : 'bg-white/20'
+                      }`}
+                    />
+                  )}
+                </div>
               ))}
             </div>
           </div>
-        </div>
 
-        {error && (
-          <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-3 rounded">
-            {error}
+          {/* Form Content */}
+          <div className="p-8">
+            {error && (
+              <div className="mb-6 bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded">
+                <p className="font-medium">{error}</p>
+              </div>
+            )}
+
+            <div className="min-h-[400px]">
+              {renderStep()}
+            </div>
           </div>
-        )}
-
-        <div className="bg-gray-800 rounded-lg p-6">{renderStep()}</div>
+        </div>
       </div>
     </div>
   );
