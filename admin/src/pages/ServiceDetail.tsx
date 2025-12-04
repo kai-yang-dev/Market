@@ -10,8 +10,28 @@ import {
   faExclamationTriangle,
   faUser,
   faTag,
+  faStar,
 } from '@fortawesome/free-solid-svg-icons'
+import { faStar as faStarRegular, faStarHalfStroke } from '@fortawesome/free-regular-svg-icons'
 import { serviceApi, Service } from '../services/api'
+
+const StarRating = ({ rating }: { rating: number }) => {
+  const fullStars = Math.floor(rating)
+  const hasHalfStar = rating % 1 >= 0.5
+  const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0)
+
+  return (
+    <div className="flex items-center space-x-1">
+      {[...Array(fullStars)].map((_, i) => (
+        <FontAwesomeIcon key={`full-${i}`} icon={faStar} className="text-yellow-400" />
+      ))}
+      {hasHalfStar && <FontAwesomeIcon icon={faStarHalfStroke} className="text-yellow-400" />}
+      {[...Array(emptyStars)].map((_, i) => (
+        <FontAwesomeIcon key={`empty-${i}`} icon={faStarRegular} className="text-gray-300" />
+      ))}
+    </div>
+  )
+}
 
 interface ConfirmDialog {
   action: 'approve' | 'block' | 'unblock' | 'delete'
@@ -136,15 +156,29 @@ function ServiceDetail() {
         <div className="bg-white rounded-xl shadow-lg overflow-hidden">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 p-8">
             {/* Left Side - Image */}
-            <div className="flex items-center justify-center bg-gray-50 rounded-lg overflow-hidden min-h-[400px]">
+            <div className="relative rounded-lg overflow-hidden min-h-[400px]">
               {service.adImage ? (
-                <img
-                  src={`http://localhost:3000${service.adImage}`}
-                  alt={service.title}
-                  className="w-full h-full object-cover"
-                />
+                <>
+                  {/* Blurred background */}
+                  <div
+                    className="absolute inset-0 bg-cover bg-center filter blur-xl scale-110"
+                    style={{
+                      backgroundImage: `url(http://localhost:3000${service.adImage})`,
+                    }}
+                  />
+                  {/* Actual image on top */}
+                  <div className="relative h-full min-h-[400px] flex items-center justify-center p-8">
+                    <img
+                      src={`http://localhost:3000${service.adImage}`}
+                      alt={service.title}
+                      className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                    />
+                  </div>
+                </>
               ) : (
-                <div className="text-9xl text-gray-300">📦</div>
+                <div className="h-full min-h-[400px] flex items-center justify-center bg-gray-50">
+                  <div className="text-9xl text-gray-300">📦</div>
+                </div>
               )}
             </div>
 
@@ -168,16 +202,16 @@ function ServiceDetail() {
                   </div>
                   <div className="text-sm text-gray-500">Price</div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <FontAwesomeIcon icon={faCheck} className="text-green-400 text-xl" />
-                  <span className="text-xl font-bold text-gray-900">
-                    {service.rating
-                      ? typeof service.rating === 'number'
-                        ? service.rating.toFixed(1)
-                        : parseFloat(service.rating as any).toFixed(1)
-                      : '0.0'}
-                  </span>
-                  <span className="text-gray-500">Rating</span>
+                <div className="flex items-center">
+                  <StarRating
+                    rating={
+                      service.rating
+                        ? typeof service.rating === 'number'
+                          ? service.rating
+                          : parseFloat(service.rating as any)
+                        : 0
+                    }
+                  />
                 </div>
               </div>
 

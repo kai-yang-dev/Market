@@ -2,8 +2,27 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSearch, faPlus, faStar, faSpinner } from '@fortawesome/free-solid-svg-icons'
+import { faStar as faStarRegular, faStarHalfStroke } from '@fortawesome/free-regular-svg-icons'
 import { useAppSelector } from '../store/hooks'
 import { categoryApi, serviceApi, Service, Category } from '../services/api'
+
+const StarRating = ({ rating }: { rating: number }) => {
+  const fullStars = Math.floor(rating)
+  const hasHalfStar = rating % 1 >= 0.5
+  const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0)
+
+  return (
+    <div className="flex items-center space-x-1">
+      {[...Array(fullStars)].map((_, i) => (
+        <FontAwesomeIcon key={`full-${i}`} icon={faStar} className="text-yellow-400" />
+      ))}
+      {hasHalfStar && <FontAwesomeIcon icon={faStarHalfStroke} className="text-yellow-400" />}
+      {[...Array(emptyStars)].map((_, i) => (
+        <FontAwesomeIcon key={`empty-${i}`} icon={faStarRegular} className="text-gray-300" />
+      ))}
+    </div>
+  )
+}
 
 function Services() {
   const { isAuthenticated } = useAppSelector((state) => state.auth)
@@ -137,15 +156,29 @@ function Services() {
                 to={`/services/${service.id}`}
                 className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all overflow-hidden border border-gray-200 group"
               >
-                <div className="h-48 bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center overflow-hidden">
+                <div className="h-48 relative overflow-hidden">
                   {service.adImage ? (
-                    <img
-                      src={`http://localhost:3000${service.adImage}`}
-                      alt={service.title}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                    />
+                    <>
+                      {/* Blurred background */}
+                      <div
+                        className="absolute inset-0 bg-cover bg-center filter blur-md scale-110"
+                        style={{
+                          backgroundImage: `url(http://localhost:3000${service.adImage})`,
+                        }}
+                      />
+                      {/* Actual image on top */}
+                      <div className="relative h-full flex items-center justify-center">
+                        <img
+                          src={`http://localhost:3000${service.adImage}`}
+                          alt={service.title}
+                          className="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                        />
+                      </div>
+                    </>
                   ) : (
-                    <div className="text-6xl text-blue-600">📦</div>
+                    <div className="h-full flex items-center justify-center bg-gradient-to-br from-blue-100 to-purple-100">
+                      <div className="text-6xl text-blue-600">📦</div>
+                    </div>
                   )}
                 </div>
                 <div className="p-6">
@@ -156,15 +189,16 @@ function Services() {
                   </div>
                   <p className="text-gray-600 text-sm mb-4 line-clamp-2">{service.adText}</p>
                   <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-1">
-                      <FontAwesomeIcon icon={faStar} className="text-yellow-400" />
-                      <span className="font-semibold text-gray-900">
-                        {service.rating
-                          ? typeof service.rating === 'number'
-                            ? service.rating.toFixed(1)
-                            : parseFloat(service.rating as any).toFixed(1)
-                          : '0.0'}
-                      </span>
+                    <div className="flex items-center">
+                      <StarRating
+                        rating={
+                          service.rating
+                            ? typeof service.rating === 'number'
+                              ? service.rating
+                              : parseFloat(service.rating as any)
+                            : 0
+                        }
+                      />
                     </div>
                     <span className="text-2xl font-bold text-blue-600">
                       ${typeof service.balance === 'number' ? service.balance.toFixed(2) : parseFloat(service.balance as any).toFixed(2)}
