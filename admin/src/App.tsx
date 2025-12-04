@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { useAppSelector } from './store/hooks'
 import Dashboard from './pages/Dashboard'
+import Categories from './pages/Categories'
 import SignIn from './pages/SignIn'
 import Layout from './components/Layout'
 
@@ -27,6 +28,13 @@ function App() {
           <PrivateRoute>
             <Layout>
               <Dashboard />
+            </Layout>
+          </PrivateRoute>
+        } />
+        <Route path="/categories" element={
+          <PrivateRoute>
+            <Layout>
+              <Categories />
             </Layout>
           </PrivateRoute>
         } />

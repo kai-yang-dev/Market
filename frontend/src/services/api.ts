@@ -52,6 +52,30 @@ export interface SignInData {
   password: string;
 }
 
+export interface Category {
+  id: string;
+  title: string;
+  icon?: string;
+  adImage?: string;
+  adText?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateCategoryData {
+  title: string;
+  icon?: string;
+  adImage?: string;
+  adText?: string;
+}
+
+export interface UpdateCategoryData {
+  title?: string;
+  icon?: string;
+  adImage?: string;
+  adText?: string;
+}
+
 export const authApi = {
   signUpStep1: async (data: SignUpStep1Data) => {
     const response = await api.post('/auth/signup/step1', data);
@@ -90,6 +114,18 @@ export const authApi = {
 
   getProfile: async () => {
     const response = await api.get('/auth/profile');
+    return response.data;
+  },
+};
+
+export const categoryApi = {
+  getAll: async (): Promise<Category[]> => {
+    const response = await api.get('/categories');
+    return response.data;
+  },
+
+  getById: async (id: string): Promise<Category> => {
+    const response = await api.get(`/categories/${id}`);
     return response.data;
   },
 };

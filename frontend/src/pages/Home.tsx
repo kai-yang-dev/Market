@@ -1,26 +1,36 @@
+import { useEffect, useState } from 'react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faGlobe, faPalette, faChartLine, faPen, faVideo, faMobileAlt, faStar, faSearch } from '@fortawesome/free-solid-svg-icons'
 import { useAppSelector } from '../store/hooks'
+import { categoryApi, Category } from '../services/api'
 
 function Home() {
   const { user, isAuthenticated } = useAppSelector((state) => state.auth)
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const categories = [
-    { name: 'Web Development', icon: '💻', count: 124 },
-    { name: 'Graphic Design', icon: '🎨', count: 89 },
-    { name: 'Digital Marketing', icon: '📱', count: 156 },
-    { name: 'Writing & Translation', icon: '✍️', count: 203 },
-    { name: 'Video & Animation', icon: '🎬', count: 67 },
-    { name: 'Music & Audio', icon: '🎵', count: 45 },
-    { name: 'Programming', icon: '⚡', count: 312 },
-    { name: 'Business', icon: '💼', count: 178 },
-  ]
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const data = await categoryApi.getAll()
+        setCategories(data)
+      } catch (error) {
+        console.error('Failed to fetch categories:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCategories()
+  }, [])
 
   const featuredServices = [
-    { id: 1, title: 'Professional Website Design', price: '$299', rating: 4.9, reviews: 127, image: '🌐' },
-    { id: 2, title: 'Logo Design Package', price: '$99', rating: 4.8, reviews: 89, image: '🎨' },
-    { id: 3, title: 'SEO Optimization', price: '$199', rating: 4.7, reviews: 156, image: '📈' },
-    { id: 4, title: 'Content Writing', price: '$49', rating: 4.9, reviews: 203, image: '✍️' },
-    { id: 5, title: 'Video Editing', price: '$149', rating: 4.6, reviews: 67, image: '🎬' },
-    { id: 6, title: 'Social Media Management', price: '$179', rating: 4.8, reviews: 134, image: '📱' },
+    { id: 1, title: 'Professional Website Design', price: '$299', rating: 4.9, reviews: 127, icon: faGlobe },
+    { id: 2, title: 'Logo Design Package', price: '$99', rating: 4.8, reviews: 89, icon: faPalette },
+    { id: 3, title: 'SEO Optimization', price: '$199', rating: 4.7, reviews: 156, icon: faChartLine },
+    { id: 4, title: 'Content Writing', price: '$49', rating: 4.9, reviews: 203, icon: faPen },
+    { id: 5, title: 'Video Editing', price: '$149', rating: 4.6, reviews: 67, icon: faVideo },
+    { id: 6, title: 'Social Media Management', price: '$179', rating: 4.8, reviews: 134, icon: faMobileAlt },
   ]
 
   return (
@@ -41,8 +51,9 @@ function Home() {
                 placeholder="Search for services..."
                 className="px-6 py-4 rounded-lg text-gray-900 w-full sm:w-96 focus:outline-none focus:ring-2 focus:ring-white"
               />
-              <button className="px-8 py-4 bg-white text-blue-600 rounded-lg font-semibold hover:bg-gray-100 transition-colors">
-                Search
+              <button className="px-8 py-4 bg-white text-blue-600 rounded-lg font-semibold hover:bg-gray-100 transition-colors flex items-center space-x-2">
+                <FontAwesomeIcon icon={faSearch} />
+                <span>Search</span>
               </button>
             </div>
           </div>
@@ -52,18 +63,46 @@ function Home() {
       {/* Categories Section */}
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <h2 className="text-3xl font-bold text-gray-900 mb-8">Browse by Category</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-6">
-          {categories.map((category, index) => (
-            <div
-              key={index}
-              className="bg-white rounded-xl p-6 shadow-md hover:shadow-xl transition-all cursor-pointer border-2 border-transparent hover:border-blue-500"
-            >
-              <div className="text-4xl mb-3">{category.icon}</div>
-              <h3 className="font-semibold text-gray-900 mb-1">{category.name}</h3>
-              <p className="text-sm text-gray-500">{category.count} services</p>
-            </div>
-          ))}
-        </div>
+        {loading ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500">Loading categories...</p>
+          </div>
+        ) : categories.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500">No categories available</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-6">
+            {categories.map((category) => (
+              <div
+                key={category.id}
+                className="bg-white rounded-xl p-6 shadow-md hover:shadow-xl transition-all cursor-pointer border-2 border-transparent hover:border-blue-500 relative overflow-hidden"
+                style={{
+                  backgroundImage: category.adImage ? `url(${category.adImage})` : undefined,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                }}
+              >
+                {category.adImage && (
+                  <div className="absolute inset-0 bg-black bg-opacity-40"></div>
+                )}
+                <div className="relative z-10">
+                  {category.icon && (
+                    <div className="text-4xl mb-3">{category.icon}</div>
+                  )}
+                  <h3 className="font-semibold text-gray-900 mb-1" style={{ color: category.adImage ? 'white' : undefined }}>
+                    {category.title}
+                  </h3>
+                  {category.adText && (
+                    <p className="text-sm" style={{ color: category.adImage ? 'rgba(255,255,255,0.9)' : '#6b7280' }}>
+                      {category.adText}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Featured Services */}
@@ -76,14 +115,14 @@ function Home() {
                 key={service.id}
                 className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all overflow-hidden border border-gray-200"
               >
-                <div className="h-48 bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center text-6xl">
-                  {service.image}
+                <div className="h-48 bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
+                  <FontAwesomeIcon icon={service.icon} className="text-6xl text-blue-600" />
                 </div>
                 <div className="p-6">
                   <h3 className="text-xl font-semibold text-gray-900 mb-2">{service.title}</h3>
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center space-x-1">
-                      <span className="text-yellow-400">★</span>
+                      <FontAwesomeIcon icon={faStar} className="text-yellow-400" />
                       <span className="font-semibold text-gray-900">{service.rating}</span>
                       <span className="text-gray-500 text-sm">({service.reviews})</span>
                     </div>
