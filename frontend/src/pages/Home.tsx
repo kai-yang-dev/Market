@@ -3,6 +3,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faGlobe, faPalette, faChartLine, faPen, faVideo, faMobileAlt, faStar, faSearch } from '@fortawesome/free-solid-svg-icons'
 import { useAppSelector } from '../store/hooks'
 import { categoryApi, Category } from '../services/api'
+import { renderIcon } from '../utils/iconHelper'
 
 function Home() {
   const { user, isAuthenticated } = useAppSelector((state) => state.auth)
@@ -78,12 +79,28 @@ function Home() {
                 key={category.id}
                 className="bg-white rounded-xl p-6 shadow-md hover:shadow-xl transition-all cursor-pointer border-2 border-transparent hover:border-blue-500"
               >
-                {category.icon && (
-                  <div className="text-4xl mb-3">{category.icon}</div>
-                )}
-                <h3 className="font-semibold text-gray-900 mb-1">
-                  {category.title}
-                </h3>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    {category.icon && (
+                      <div className="text-4xl mb-2 text-blue-600">
+                        {renderIcon(category.icon)}
+                      </div>
+                    )}
+                    <h3 className="font-semibold text-gray-900">
+                      {category.title}
+                    </h3>
+                  </div>
+                  {category.serviceCount !== undefined && (
+                    <div className="text-right ml-4">
+                      <div className="text-3xl font-bold text-blue-600">
+                        {category.serviceCount}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {category.serviceCount === 1 ? 'service' : 'services'}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>

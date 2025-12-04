@@ -56,6 +56,7 @@ export interface Category {
   id: string;
   title: string;
   icon?: string;
+  serviceCount?: number;
   createdAt: string;
   updatedAt: string;
 }
