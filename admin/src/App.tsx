@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useAppSelector } from './store/hooks'
 import Dashboard from './pages/Dashboard'
 import Categories from './pages/Categories'
+import CategoryForm from './pages/CategoryForm'
 import SignIn from './pages/SignIn'
 import Layout from './components/Layout'
 
@@ -35,6 +36,20 @@ function App() {
           <PrivateRoute>
             <Layout>
               <Categories />
+            </Layout>
+          </PrivateRoute>
+        } />
+        <Route path="/categories/new" element={
+          <PrivateRoute>
+            <Layout>
+              <CategoryForm />
+            </Layout>
+          </PrivateRoute>
+        } />
+        <Route path="/categories/:id/edit" element={
+          <PrivateRoute>
+            <Layout>
+              <CategoryForm />
             </Layout>
           </PrivateRoute>
         } />
