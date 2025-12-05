@@ -9,6 +9,7 @@ import CreateService from './pages/CreateService'
 import ServiceDetail from './pages/ServiceDetail'
 import Chat from './pages/Chat'
 import Feed from './pages/Feed'
+import Profile from './pages/Profile'
 import Layout from './components/Layout'
 
 function App() {
@@ -30,6 +31,7 @@ function App() {
                 <Route path="/services/new" element={<CreateService />} />
                 <Route path="/services/:id" element={<ServiceDetail />} />
                 <Route path="/chat/:id" element={<Chat />} />
+                <Route path="/profile" element={<Profile />} />
               </Routes>
             </Layout>
           }
