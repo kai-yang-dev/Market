@@ -1,7 +1,7 @@
 import { ReactNode, useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faChevronDown, faList, faUser } from '@fortawesome/free-solid-svg-icons'
+import { faChevronDown, faList, faUser, faSignOutAlt, faUserCircle } from '@fortawesome/free-solid-svg-icons'
 import { useAppSelector, useAppDispatch } from '../store/hooks'
 import { logout } from '../store/slices/authSlice'
 
@@ -14,18 +14,23 @@ function Layout({ children }: LayoutProps) {
   const dispatch = useAppDispatch()
   const { user, isAuthenticated } = useAppSelector((state) => state.auth)
   const [servicesDropdownOpen, setServicesDropdownOpen] = useState(false)
-  const dropdownRef = useRef<HTMLDivElement>(null)
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false)
+  const servicesDropdownRef = useRef<HTMLDivElement>(null)
+  const userDropdownRef = useRef<HTMLDivElement>(null)
 
   const handleSignOut = () => {
     dispatch(logout())
     navigate('/signin')
   }
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (servicesDropdownRef.current && !servicesDropdownRef.current.contains(event.target as Node)) {
         setServicesDropdownOpen(false)
+      }
+      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target as Node)) {
+        setUserDropdownOpen(false)
       }
     }
 
@@ -56,7 +61,7 @@ function Layout({ children }: LayoutProps) {
               <Link to="/feed" className="text-gray-300 hover:text-blue-400 font-medium transition-colors">
                 Feed
               </Link>
-              <div className="relative" ref={dropdownRef}>
+              <div className="relative" ref={servicesDropdownRef}>
                 <button
                   onClick={() => setServicesDropdownOpen(!servicesDropdownOpen)}
                   className="text-gray-300 hover:text-blue-400 font-medium transition-colors flex items-center space-x-1"
@@ -103,22 +108,47 @@ function Layout({ children }: LayoutProps) {
                       <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">0</span>
                     </button>
                   </div>
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold">
-                      {user.firstName?.[0] || user.email[0].toUpperCase()}
-                    </div>
-                    <div className="hidden sm:block">
-                      <p className="text-sm font-medium text-gray-300">
-                        {user.firstName} {user.lastName}
-                      </p>
-                      <p className="text-xs text-gray-400">{user.email}</p>
-                    </div>
+                  <div className="relative" ref={userDropdownRef}>
                     <button
-                      onClick={handleSignOut}
-                      className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-blue-400 transition-colors"
+                      onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                      className="flex items-center space-x-3 hover:opacity-80 transition-opacity"
                     >
-                      Sign Out
+                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold">
+                        {user.firstName?.[0] || user.email[0].toUpperCase()}
+                      </div>
+                      <div className="hidden sm:block text-left">
+                        <p className="text-sm font-medium text-gray-300">
+                          {user.firstName} {user.lastName}
+                        </p>
+                        <p className="text-xs text-gray-400">{user.email}</p>
+                      </div>
+                      <FontAwesomeIcon
+                        icon={faChevronDown}
+                        className={`text-xs text-gray-400 transition-transform ${userDropdownOpen ? 'rotate-180' : ''}`}
+                      />
                     </button>
+                    {userDropdownOpen && (
+                      <div className="absolute top-full right-0 mt-2 w-48 bg-gray-800 rounded-lg shadow-lg border border-gray-700 py-2 z-50">
+                        <Link
+                          to="/profile"
+                          onClick={() => setUserDropdownOpen(false)}
+                          className="block px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-blue-400 transition-colors flex items-center space-x-2"
+                        >
+                          <FontAwesomeIcon icon={faUserCircle} className="text-sm" />
+                          <span>Profile</span>
+                        </Link>
+                        <button
+                          onClick={() => {
+                            setUserDropdownOpen(false)
+                            handleSignOut()
+                          }}
+                          className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-blue-400 transition-colors flex items-center space-x-2"
+                        >
+                          <FontAwesomeIcon icon={faSignOutAlt} className="text-sm" />
+                          <span>Logout</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </>
               ) : (
