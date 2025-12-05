@@ -697,7 +697,7 @@ function Chat() {
                             <h4 className="font-semibold mb-1.5 text-base">{milestone.title}</h4>
                             <p className="text-sm mb-3 opacity-90 leading-relaxed">{milestone.description}</p>
                             <div className="flex items-center justify-between pt-2 border-t border-white/10">
-                              <span className="text-lg font-bold text-[#6bb2f0]">${milestone.balance.toFixed(2)}</span>
+                              <span className="text-lg font-bold text-[#6bb2f0]">${Number(milestone.balance).toFixed(2)}</span>
                               <span className={`text-[10px] ${isOwn ? 'text-[#6bb2f0]' : 'text-[#708499]'}`}>
                                 {formatTime(new Date(milestone.createdAt))}
                               </span>
@@ -859,7 +859,7 @@ function Chat() {
                 </div>
                 <p className="text-sm text-[#708499] leading-relaxed">{milestone.description}</p>
                 <div className="flex items-center justify-between pt-2 border-t border-[#0e1621]">
-                  <span className="text-base font-bold text-[#6bb2f0]">${milestone.balance.toFixed(2)}</span>
+                  <span className="text-base font-bold text-[#6bb2f0]">${Number(milestone.balance).toFixed(2)}</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {milestone.status === 'draft' && (

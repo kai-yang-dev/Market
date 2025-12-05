@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Milestone, MilestoneStatus } from '../entities/milestone.entity';
 import { Conversation } from '../entities/conversation.entity';
+import { Message } from '../entities/message.entity';
 import { CreateMilestoneDto } from './dto/create-milestone.dto';
 import { UpdateMilestoneStatusDto } from './dto/update-milestone-status.dto';
 import { ChatGateway } from '../chat/chat.gateway';
@@ -14,6 +15,8 @@ export class MilestoneService {
     private milestoneRepository: Repository<Milestone>,
     @InjectRepository(Conversation)
     private conversationRepository: Repository<Conversation>,
+    @InjectRepository(Message)
+    private messageRepository: Repository<Message>,
     @Inject(forwardRef(() => ChatGateway))
     private chatGateway: ChatGateway,
   ) {}
@@ -96,6 +99,7 @@ export class MilestoneService {
 
   async updateStatus(id: string, userId: string, updateStatusDto: UpdateMilestoneStatusDto): Promise<Milestone> {
     const milestone = await this.findOne(id, userId);
+    const oldStatus = milestone.status;
 
     // Validate status transitions
     const validTransitions = this.getValidStatusTransitions(milestone.status, userId, milestone.clientId, milestone.providerId);
@@ -125,7 +129,30 @@ export class MilestoneService {
       });
       
       if (conv) {
-        // Emit milestone update via WebSocket
+        // Create a system message for milestone status update
+        const statusChangeMessage = this.messageRepository.create({
+          conversationId: conv.id,
+          senderId: userId,
+          message: `Milestone "${milestone.title}" status changed from ${oldStatus} to ${updateStatusDto.status}`,
+        });
+        
+        const savedMessage = await this.messageRepository.save(statusChangeMessage);
+        
+        // Update conversation's updatedAt
+        await this.conversationRepository.update(conv.id, { updatedAt: new Date() });
+        
+        // Load message with sender info
+        const messageWithSender = await this.messageRepository.findOne({
+          where: { id: savedMessage.id },
+          relations: ['sender'],
+        });
+        
+        // Emit new message via WebSocket
+        if (messageWithSender) {
+          this.chatGateway.server.to(`conversation:${conv.id}`).emit('new_message', messageWithSender);
+        }
+        
+        // Also emit milestone update via WebSocket
         this.chatGateway.emitMilestoneUpdate(conv.id, savedMilestone).catch((error) => {
           console.error('Failed to emit milestone update:', error);
         });
