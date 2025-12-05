@@ -6,10 +6,17 @@ import { AuthModule } from './auth/auth.module';
 import { AdminModule } from './admin/admin.module';
 import { CategoryModule } from './category/category.module';
 import { ServiceModule } from './service/service.module';
+import { ConversationModule } from './conversation/conversation.module';
+import { MessageModule } from './message/message.module';
+import { MilestoneModule } from './milestone/milestone.module';
+import { ChatModule } from './chat/chat.module';
 import { User } from './entities/user.entity';
 import { Category } from './entities/category.entity';
 import { Service } from './entities/service.entity';
 import { Tag } from './entities/tag.entity';
+import { Conversation } from './entities/conversation.entity';
+import { Message } from './entities/message.entity';
+import { Milestone } from './entities/milestone.entity';
 
 @Module({
   imports: [
@@ -20,7 +27,7 @@ import { Tag } from './entities/tag.entity';
       username: 'root',
       password: 'Csh104729!',
       database: 'market',
-      entities: [User, Category, Service, Tag],
+      entities: [User, Category, Service, Tag, Conversation, Message, Milestone],
       synchronize: true, // Set to false in production
       logging: true,
     }),
@@ -28,6 +35,10 @@ import { Tag } from './entities/tag.entity';
     AdminModule,
     CategoryModule,
     ServiceModule,
+    ConversationModule,
+    MessageModule,
+    MilestoneModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [AppService],

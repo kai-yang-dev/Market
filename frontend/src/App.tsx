@@ -7,6 +7,7 @@ import Services from './pages/Services'
 import MyServices from './pages/MyServices'
 import CreateService from './pages/CreateService'
 import ServiceDetail from './pages/ServiceDetail'
+import Chat from './pages/Chat'
 import Layout from './components/Layout'
 
 function App() {
@@ -26,6 +27,7 @@ function App() {
                 <Route path="/my-services" element={<MyServices />} />
                 <Route path="/services/new" element={<CreateService />} />
                 <Route path="/services/:id" element={<ServiceDetail />} />
+                <Route path="/chat/:id" element={<Chat />} />
               </Routes>
             </Layout>
           }

@@ -252,5 +252,203 @@ export const serviceApi = {
   },
 };
 
+export interface Conversation {
+  id: string;
+  serviceId: string;
+  clientId: string;
+  providerId: string;
+  service?: Service;
+  client?: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    userName?: string;
+  };
+  provider?: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    userName?: string;
+  };
+  messages?: Message[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Message {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  message: string;
+  attachmentFiles?: string[];
+  sender?: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    userName?: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Milestone {
+  id: string;
+  clientId: string;
+  providerId: string;
+  serviceId: string;
+  title: string;
+  description: string;
+  attachedFiles?: string[];
+  balance: number;
+  status: 'draft' | 'processing' | 'canceled' | 'completed' | 'withdraw' | 'released' | 'dispute';
+  client?: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    userName?: string;
+  };
+  provider?: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    userName?: string;
+  };
+  service?: Service;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateMilestoneData {
+  serviceId: string;
+  title: string;
+  description: string;
+  attachedFiles?: string[];
+  balance: number;
+}
+
+export const conversationApi = {
+  create: async (serviceId: string): Promise<Conversation> => {
+    const response = await api.post('/conversations', { serviceId });
+    return response.data;
+  },
+
+  getAll: async (): Promise<Conversation[]> => {
+    const response = await api.get('/conversations');
+    return response.data;
+  },
+
+  getById: async (id: string): Promise<Conversation> => {
+    const response = await api.get(`/conversations/${id}`);
+    return response.data;
+  },
+
+  getByServiceId: async (serviceId: string): Promise<Conversation | null> => {
+    const response = await api.get(`/conversations/service/${serviceId}`);
+    return response.data;
+  },
+
+  getByServiceIdAsProvider: async (serviceId: string): Promise<Conversation[]> => {
+    try {
+      const response = await api.get(`/conversations/service/${serviceId}/provider`);
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (error: any) {
+      // If 404, try fallback: get all conversations and filter by service
+      if (error.response?.status === 404) {
+        console.warn('Provider endpoint not found (404). Backend may need restart. Using fallback...');
+        try {
+          const allConversations = await conversationApi.getAll();
+          const userStr = localStorage.getItem('user');
+          if (userStr) {
+            const user = JSON.parse(userStr);
+            // Filter conversations for this service where user is provider
+            const filtered = allConversations.filter(
+              (conv) => conv.serviceId === serviceId && conv.providerId === user.id
+            );
+            // Get last message for each (simplified - just get first message if available)
+            return filtered.map((conv) => ({
+              ...conv,
+              messages: conv.messages && conv.messages.length > 0 ? [conv.messages[conv.messages.length - 1]] : [],
+            }));
+          }
+          return [];
+        } catch (fallbackError) {
+          console.error('Fallback also failed:', fallbackError);
+          return [];
+        }
+      }
+      // For other errors, return empty array instead of throwing
+      console.error('Error fetching provider conversations:', error);
+      return [];
+    }
+  },
+};
+
+export const messageApi = {
+  create: async (conversationId: string, message: string, attachmentFiles?: string[]): Promise<Message> => {
+    const response = await api.post(`/messages/conversation/${conversationId}`, {
+      message,
+      attachmentFiles,
+    });
+    return response.data;
+  },
+
+  getByConversation: async (conversationId: string): Promise<Message[]> => {
+    const response = await api.get(`/messages/conversation/${conversationId}`);
+    return response.data;
+  },
+
+  getById: async (id: string): Promise<Message> => {
+    const response = await api.get(`/messages/${id}`);
+    return response.data;
+  },
+};
+
+export const milestoneApi = {
+  create: async (conversationId: string, data: CreateMilestoneData): Promise<Milestone> => {
+    const response = await api.post(`/milestones/conversation/${conversationId}`, data);
+    return response.data;
+  },
+
+  getByConversation: async (conversationId: string): Promise<Milestone[]> => {
+    const response = await api.get(`/milestones/conversation/${conversationId}`);
+    return response.data;
+  },
+
+  getById: async (id: string): Promise<Milestone> => {
+    const response = await api.get(`/milestones/${id}`);
+    return response.data;
+  },
+
+  accept: async (id: string): Promise<Milestone> => {
+    const response = await api.patch(`/milestones/${id}/accept`);
+    return response.data;
+  },
+
+  cancel: async (id: string): Promise<Milestone> => {
+    const response = await api.patch(`/milestones/${id}/cancel`);
+    return response.data;
+  },
+
+  complete: async (id: string): Promise<Milestone> => {
+    const response = await api.patch(`/milestones/${id}/complete`);
+    return response.data;
+  },
+
+  withdraw: async (id: string): Promise<Milestone> => {
+    const response = await api.patch(`/milestones/${id}/withdraw`);
+    return response.data;
+  },
+
+  release: async (id: string): Promise<Milestone> => {
+    const response = await api.patch(`/milestones/${id}/release`);
+    return response.data;
+  },
+
+  dispute: async (id: string): Promise<Milestone> => {
+    const response = await api.patch(`/milestones/${id}/dispute`);
+    return response.data;
+  },
+};
+
 export default api;
 

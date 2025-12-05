@@ -1,13 +1,33 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { IoAdapter } from '@nestjs/platform-socket.io';
+import { ServerOptions } from 'socket.io';
 import { join } from 'path';
 import { AppModule } from './app.module';
+
+class SocketIOAdapter extends IoAdapter {
+  createIOServer(port: number, options?: ServerOptions) {
+    const server = super.createIOServer(port, {
+      ...options,
+      cors: {
+        origin: ['http://localhost:5173', 'http://localhost:5174'],
+        credentials: true,
+        methods: ['GET', 'POST'],
+      },
+      transports: ['websocket', 'polling'],
+    });
+    return server;
+  }
+}
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   
-  // Set global prefix for all routes
+  // Use Socket.IO adapter for WebSocket support (must be before setGlobalPrefix)
+  app.useWebSocketAdapter(new SocketIOAdapter(app));
+  
+  // Set global prefix for all routes (Socket.IO is excluded automatically)
   app.setGlobalPrefix('api');
   
   // Serve static files from uploads directory

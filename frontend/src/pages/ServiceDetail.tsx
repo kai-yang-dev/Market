@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faStar, faArrowLeft, faSpinner, faUser } from '@fortawesome/free-solid-svg-icons'
+import { faStar, faArrowLeft, faSpinner, faUser, faComments } from '@fortawesome/free-solid-svg-icons'
 import { faStar as faStarRegular, faStarHalfStroke } from '@fortawesome/free-regular-svg-icons'
-import { serviceApi, Service } from '../services/api'
+import { serviceApi, Service, conversationApi, Conversation } from '../services/api'
+import { useAppSelector } from '../store/hooks'
 
 const StarRating = ({ rating }: { rating: number }) => {
   const fullStars = Math.floor(rating)
@@ -26,14 +27,28 @@ const StarRating = ({ rating }: { rating: number }) => {
 function ServiceDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { user, isAuthenticated } = useAppSelector((state) => state.auth)
   const [service, setService] = useState<Service | null>(null)
   const [loading, setLoading] = useState(true)
+  const [connecting, setConnecting] = useState(false)
+  const [connectedClients, setConnectedClients] = useState<Conversation[]>([])
+  const [loadingClients, setLoadingClients] = useState(false)
 
   useEffect(() => {
     if (id) {
       fetchService()
     }
   }, [id])
+
+  useEffect(() => {
+    if (service && user && isAuthenticated) {
+      // Check if user is the provider (owner of the service)
+      const isProvider = service.userId === user.id
+      if (isProvider) {
+        fetchConnectedClients()
+      }
+    }
+  }, [service, user, isAuthenticated])
 
   const fetchService = async () => {
     try {
@@ -46,6 +61,72 @@ function ServiceDetail() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const fetchConnectedClients = async () => {
+    if (!service || !user) {
+      console.log('Cannot fetch clients: missing service or user', { service: !!service, user: !!user })
+      return
+    }
+
+    // Double check that user is the provider
+    if (service.userId !== user.id) {
+      console.log('User is not the provider, skipping fetch', { serviceUserId: service.userId, userId: user.id })
+      return
+    }
+
+    try {
+      setLoadingClients(true)
+      console.log('Fetching connected clients for service:', service.id)
+      const conversations = await conversationApi.getByServiceIdAsProvider(service.id)
+      console.log('Fetched connected clients:', conversations)
+      setConnectedClients(Array.isArray(conversations) ? conversations : [])
+    } catch (error: any) {
+      console.error('Failed to fetch connected clients:', error)
+      if (error.response) {
+        console.error('Error response:', error.response.status, error.response.data)
+        if (error.response.status === 403) {
+          console.log('User is not the provider of this service')
+        } else if (error.response.status === 404) {
+          console.log('Service not found')
+        }
+      } else if (error.request) {
+        console.error('No response received:', error.request)
+      } else {
+        console.error('Error setting up request:', error.message)
+      }
+      setConnectedClients([])
+    } finally {
+      setLoadingClients(false)
+    }
+  }
+
+  const handleConnectSeller = async () => {
+    if (!isAuthenticated) {
+      navigate('/signin')
+      return
+    }
+
+    if (!service) return
+
+    try {
+      setConnecting(true)
+      const conversation = await conversationApi.create(service.id)
+      navigate(`/chat/${conversation.id}`)
+    } catch (error: any) {
+      console.error('Failed to connect with seller:', error)
+      if (error.response?.status === 403) {
+        alert('You cannot connect with yourself')
+      } else {
+        alert('Failed to connect with seller. Please try again.')
+      }
+    } finally {
+      setConnecting(false)
+    }
+  }
+
+  const handleClientClick = (conversationId: string) => {
+    navigate(`/chat/${conversationId}`)
   }
 
   if (loading) {
@@ -194,10 +275,84 @@ function ServiceDetail() {
                 </div>
               )}
 
+              {/* Connected Clients (Provider View) */}
+              {service && user && isAuthenticated && service.userId === user.id && (
+                <div className="mb-6 p-4 bg-gray-700 rounded-lg">
+                  <h2 className="text-xl font-semibold text-gray-100 mb-3 flex items-center space-x-2">
+                    <FontAwesomeIcon icon={faComments} />
+                    <span>Connected Clients</span>
+                    {loadingClients && (
+                      <FontAwesomeIcon icon={faSpinner} className="animate-spin text-sm text-gray-400" />
+                    )}
+                  </h2>
+                  {loadingClients ? (
+                    <p className="text-gray-400 text-sm">Loading clients...</p>
+                  ) : connectedClients.length === 0 ? (
+                    <p className="text-gray-400 text-sm">No clients have connected yet</p>
+                  ) : (
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {connectedClients.map((conversation) => {
+                        const client = conversation.client
+                        const lastMessage = conversation.messages && conversation.messages.length > 0
+                          ? conversation.messages[0] // First message is the most recent (ordered DESC)
+                          : null
+                        return (
+                          <button
+                            key={conversation.id}
+                            onClick={() => handleClientClick(conversation.id)}
+                            className="w-full p-3 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors text-left"
+                          >
+                            <div className="flex items-center space-x-3">
+                              <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-500 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0">
+                                {client?.firstName?.[0] || client?.userName?.[0] || <FontAwesomeIcon icon={faUser} />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-gray-100 truncate">
+                                  {client?.firstName && client?.lastName
+                                    ? `${client.firstName} ${client.lastName}`
+                                    : client?.userName || 'Anonymous'}
+                                </p>
+                                {lastMessage && (
+                                  <p className="text-xs text-gray-400 truncate mt-1">
+                                    {lastMessage.message}
+                                  </p>
+                                )}
+                              </div>
+                              {lastMessage && (
+                                <span className="text-xs text-gray-400 flex-shrink-0">
+                                  {new Date(lastMessage.createdAt).toLocaleTimeString([], {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div className="mt-auto space-y-3">
-                <button className="w-full px-6 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-md hover:shadow-lg text-lg">
-                  Contact Seller
+                <button
+                  onClick={handleConnectSeller}
+                  disabled={connecting || !isAuthenticated || (service.user && service.user.id === user?.id)}
+                  className="w-full px-6 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-md hover:shadow-lg text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                >
+                  {connecting ? (
+                    <>
+                      <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
+                      <span>Connecting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FontAwesomeIcon icon={faComments} />
+                      <span>Connect Seller</span>
+                    </>
+                  )}
                 </button>
                 <button className="w-full px-6 py-4 border-2 border-blue-600 text-blue-400 rounded-lg font-semibold hover:bg-blue-900/30 transition-colors text-lg">
                   Add to Favorites
