@@ -121,48 +121,34 @@ function MyServices() {
 
   return (
     <div className="min-h-screen bg-gray-900">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="flex flex-col space-y-6">
-            <div className="flex flex-col lg:flex-row items-center justify-between gap-4">
-              {/* Title */}
-              <div className="flex-shrink-0">
-                <h1 className="text-4xl md:text-5xl font-bold mb-2 drop-shadow-lg">My Services</h1>
-                <p className="text-blue-100">Manage your services</p>
-              </div>
-
-              {/* Search Input - Centered */}
-              <div className="relative flex-1 max-w-2xl w-full lg:mx-8">
-                <FontAwesomeIcon
-                  icon={faSearch}
-                  className="absolute left-4 top-1/2 transform -translate-y-1/2 text-blue-200"
-                />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search your services..."
-                  className="w-full pl-12 pr-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-white focus:bg-white/20 transition-all"
-                />
-              </div>
-
-              {/* Create Service Button */}
-              <div className="flex-shrink-0">
-                <Link
-                  to="/services/new"
-                  className="px-8 py-3 bg-white text-blue-600 rounded-lg font-semibold hover:bg-gray-100 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center space-x-2 whitespace-nowrap"
-                >
-                  <FontAwesomeIcon icon={faPlus} />
-                  <span>Create Service</span>
-                </Link>
-              </div>
-            </div>
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Search Input */}
+        <div className="mb-6">
+          <div className="relative max-w-2xl mx-auto">
+            <FontAwesomeIcon
+              icon={faSearch}
+              className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"
+            />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search your services..."
+              className="w-full pl-12 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            />
           </div>
         </div>
-      </div>
 
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Create Service Button */}
+        <div className="mb-6 text-center">
+          <Link
+            to="/services/new"
+            className="inline-flex items-center space-x-2 px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-md hover:shadow-lg"
+          >
+            <FontAwesomeIcon icon={faPlus} />
+            <span>Create Service</span>
+          </Link>
+        </div>
         {/* Status Filter Bar */}
         <div className="bg-gray-800 rounded-xl shadow-md p-4 mb-6 overflow-x-auto">
           <div className="flex items-center space-x-2 min-w-max">
