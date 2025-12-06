@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faSearch, faPlus, faStar, faSpinner, faTh, faTable } from '@fortawesome/free-solid-svg-icons'
+import { faSearch, faPlus, faStar, faSpinner, faTh, faTable, faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
 import { faStar as faStarRegular, faStarHalfStroke } from '@fortawesome/free-regular-svg-icons'
 import { useAppSelector } from '../store/hooks'
 import { categoryApi, serviceApi, Service, Category } from '../services/api'
@@ -36,6 +36,10 @@ function Services() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [itemsPerPage, setItemsPerPage] = useState(12)
   
   // Load view mode from localStorage, default to 'card'
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -50,7 +54,6 @@ function Services() {
 
   useEffect(() => {
     fetchCategories()
-    fetchServices()
   }, [])
 
   // Save view mode to localStorage when it changes
@@ -58,12 +61,18 @@ function Services() {
     localStorage.setItem(STORAGE_KEY, viewMode)
   }, [viewMode])
 
+  // Reset to page 1 when filters or page size change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, selectedCategory, itemsPerPage])
+
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       fetchServices()
-    }, 300)
+    }, searchTerm ? 300 : 0)
     return () => clearTimeout(timeoutId)
-  }, [searchTerm, selectedCategory])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, searchTerm, selectedCategory, itemsPerPage])
 
   const fetchCategories = async () => {
     try {
@@ -77,15 +86,21 @@ function Services() {
   const fetchServices = async () => {
     try {
       setLoading(true)
-      const params: any = { status: 'active' }
+      const params: any = { 
+        status: 'active',
+        page: currentPage,
+        limit: itemsPerPage,
+      }
       if (selectedCategory) {
         params.categoryId = selectedCategory
       }
       if (searchTerm.trim()) {
         params.search = searchTerm.trim()
       }
-      const data = await serviceApi.getAll(params)
-      setServices(data)
+      const response = await serviceApi.getAllPaginated(params)
+      setServices(response.data)
+      setTotal(response.total)
+      setTotalPages(response.totalPages)
     } catch (error) {
       console.error('Failed to fetch services:', error)
     } finally {
@@ -102,60 +117,60 @@ function Services() {
             <div className="bg-gray-800 rounded-xl shadow-md p-4 sticky top-4">
               <h2 className="text-lg font-semibold text-gray-100 mb-4">Categories</h2>
               <div className="space-y-2">
-                <button
-                  onClick={() => setSelectedCategory('')}
+            <button
+              onClick={() => setSelectedCategory('')}
                   className={`w-full px-4 py-3 rounded-lg font-medium transition-all flex items-center justify-between ${
+                selectedCategory === ''
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              <span>All Categories</span>
+              {totalServiceCount > 0 && (
+                <span
+                  className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
                     selectedCategory === ''
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      ? 'bg-white/20 text-white'
+                      : 'bg-blue-600 text-blue-200'
                   }`}
                 >
-                  <span>All Categories</span>
-                  {totalServiceCount > 0 && (
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                        selectedCategory === ''
-                          ? 'bg-white/20 text-white'
-                          : 'bg-blue-600 text-blue-200'
-                      }`}
-                    >
-                      {totalServiceCount}
-                    </span>
-                  )}
-                </button>
-                {categories.map((category) => (
-                  <button
-                    key={category.id}
-                    onClick={() => setSelectedCategory(category.id)}
+                  {totalServiceCount}
+                </span>
+              )}
+            </button>
+            {categories.map((category) => (
+              <button
+                key={category.id}
+                onClick={() => setSelectedCategory(category.id)}
                     className={`w-full px-4 py-3 rounded-lg font-medium transition-all flex items-center justify-between ${
+                  selectedCategory === category.id
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                    <div className="flex items-center space-x-2">
+                {category.icon && (
+                  <span className={selectedCategory === category.id ? 'text-white' : 'text-blue-400'}>
+                    {renderIcon(category.icon, 'text-lg')}
+                  </span>
+                )}
+                <span>{category.title}</span>
+                    </div>
+                {category.serviceCount !== undefined && category.serviceCount > 0 && (
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
                       selectedCategory === category.id
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-blue-600 text-blue-200'
                     }`}
                   >
-                    <div className="flex items-center space-x-2">
-                      {category.icon && (
-                        <span className={selectedCategory === category.id ? 'text-white' : 'text-blue-400'}>
-                          {renderIcon(category.icon, 'text-lg')}
-                        </span>
-                      )}
-                      <span>{category.title}</span>
-                    </div>
-                    {category.serviceCount !== undefined && category.serviceCount > 0 && (
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                          selectedCategory === category.id
-                            ? 'bg-white/20 text-white'
-                            : 'bg-blue-600 text-blue-200'
-                        }`}
-                      >
-                        {category.serviceCount}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
+                    {category.serviceCount}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
           </div>
 
           {/* Right Content - Search, Create Button, and Services */}
@@ -214,105 +229,105 @@ function Services() {
             </div>
 
             {/* Services Display */}
-            {loading ? (
-              <div className="text-center py-20 bg-gray-800 rounded-xl shadow-md">
-                <FontAwesomeIcon icon={faSpinner} className="animate-spin text-4xl text-blue-400 mb-4" />
-                <p className="text-gray-400">Loading services...</p>
-              </div>
-            ) : services.length === 0 ? (
-              <div className="text-center py-20 bg-gray-800 rounded-xl shadow-md">
-                <p className="text-gray-400 mb-6 text-lg">No services found</p>
-                {isAuthenticated && (
-                  <Link
-                    to="/services/new"
-                    className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-md hover:shadow-lg"
-                  >
-                    Create First Service
-                  </Link>
-                )}
-              </div>
+        {loading ? (
+          <div className="text-center py-20 bg-gray-800 rounded-xl shadow-md">
+            <FontAwesomeIcon icon={faSpinner} className="animate-spin text-4xl text-blue-400 mb-4" />
+            <p className="text-gray-400">Loading services...</p>
+          </div>
+        ) : services.length === 0 ? (
+          <div className="text-center py-20 bg-gray-800 rounded-xl shadow-md">
+            <p className="text-gray-400 mb-6 text-lg">No services found</p>
+            {isAuthenticated && (
+              <Link
+                to="/services/new"
+                className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-md hover:shadow-lg"
+              >
+                Create First Service
+              </Link>
+            )}
+          </div>
             ) : viewMode === 'card' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {services.map((service) => (
-                  <Link
-                    key={service.id}
-                    to={`/services/${service.id}`}
-                    className="bg-gray-800 rounded-xl shadow-md hover:shadow-xl transition-all overflow-hidden border border-gray-700 group"
-                  >
-                    <div className="h-48 relative overflow-hidden">
-                      {service.adImage ? (
-                        <>
-                          {/* Blurred background */}
-                          <div
-                            className="absolute inset-0 bg-cover bg-center filter blur-md scale-110"
-                            style={{
-                              backgroundImage: `url(http://localhost:3000${service.adImage})`,
-                            }}
-                          />
-                          {/* Actual image on top */}
-                          <div className="relative h-full flex items-center justify-center">
-                            <img
-                              src={`http://localhost:3000${service.adImage}`}
-                              alt={service.title}
-                              className="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform duration-300"
-                            />
-                          </div>
-                        </>
-                      ) : (
-                        <div className="h-full flex items-center justify-center bg-gradient-to-br from-blue-900 to-purple-900">
-                          <div className="text-6xl text-blue-400">📦</div>
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-6">
-                      <div className="flex items-start justify-between mb-2">
-                        <h3 className="text-xl font-semibold text-gray-100 group-hover:text-blue-400 transition-colors line-clamp-2">
-                          {service.title}
-                        </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {services.map((service) => (
+              <Link
+                key={service.id}
+                to={`/services/${service.id}`}
+                className="bg-gray-800 rounded-xl shadow-md hover:shadow-xl transition-all overflow-hidden border border-gray-700 group"
+              >
+                <div className="h-48 relative overflow-hidden">
+                  {service.adImage ? (
+                    <>
+                      {/* Blurred background */}
+                      <div
+                        className="absolute inset-0 bg-cover bg-center filter blur-md scale-110"
+                        style={{
+                          backgroundImage: `url(http://localhost:3000${service.adImage})`,
+                        }}
+                      />
+                      {/* Actual image on top */}
+                      <div className="relative h-full flex items-center justify-center">
+                        <img
+                          src={`http://localhost:3000${service.adImage}`}
+                          alt={service.title}
+                          className="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                        />
                       </div>
-                      <p className="text-gray-400 text-sm mb-4 line-clamp-2">{service.adText}</p>
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center">
-                          <StarRating
-                            rating={
-                              service.rating
-                                ? typeof service.rating === 'number'
-                                  ? service.rating
-                                  : parseFloat(service.rating as any)
-                                : 0
-                            }
-                          />
-                        </div>
-                        <span className="text-2xl font-bold text-blue-400">
-                          ${typeof service.balance === 'number' 
-                            ? (Math.round(service.balance * 100) / 100).toFixed(2)
-                            : (Math.round(parseFloat(service.balance as any) * 100) / 100).toFixed(2)}
+                    </>
+                  ) : (
+                    <div className="h-full flex items-center justify-center bg-gradient-to-br from-blue-900 to-purple-900">
+                      <div className="text-6xl text-blue-400">📦</div>
+                    </div>
+                  )}
+                </div>
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="text-xl font-semibold text-gray-100 group-hover:text-blue-400 transition-colors line-clamp-2">
+                      {service.title}
+                    </h3>
+                  </div>
+                  <p className="text-gray-400 text-sm mb-4 line-clamp-2">{service.adText}</p>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center">
+                      <StarRating
+                        rating={
+                          service.rating
+                            ? typeof service.rating === 'number'
+                              ? service.rating
+                              : parseFloat(service.rating as any)
+                            : 0
+                        }
+                      />
+                    </div>
+                    <span className="text-2xl font-bold text-blue-400">
+                      ${typeof service.balance === 'number' 
+                        ? (Math.round(service.balance * 100) / 100).toFixed(2)
+                        : (Math.round(parseFloat(service.balance as any) * 100) / 100).toFixed(2)}
+                    </span>
+                  </div>
+                  {service.category && (
+                    <div className="text-xs text-gray-400 mb-2">Category: {service.category.title}</div>
+                  )}
+                  {service.tags && service.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {service.tags.slice(0, 3).map((tag) => (
+                        <span
+                          key={tag.id}
+                          className="px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded-full"
+                        >
+                          {tag.title}
                         </span>
-                      </div>
-                      {service.category && (
-                        <div className="text-xs text-gray-400 mb-2">Category: {service.category.title}</div>
-                      )}
-                      {service.tags && service.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {service.tags.slice(0, 3).map((tag) => (
-                            <span
-                              key={tag.id}
-                              className="px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded-full"
-                            >
-                              {tag.title}
-                            </span>
-                          ))}
-                          {service.tags.length > 3 && (
-                            <span className="px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded-full">
-                              +{service.tags.length - 3}
-                            </span>
-                          )}
-                        </div>
+                      ))}
+                      {service.tags.length > 3 && (
+                        <span className="px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded-full">
+                          +{service.tags.length - 3}
+                        </span>
                       )}
                     </div>
-                  </Link>
-                ))}
-              </div>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
             ) : (
               <div className="bg-gray-800 rounded-xl shadow-md overflow-hidden">
                 <div className="overflow-x-auto">
@@ -425,6 +440,81 @@ function Services() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+
+            {/* Pagination */}
+            {!loading && (
+              <div className="bg-gray-800 rounded-xl shadow-md p-6 mt-8">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
+                    <div className="text-sm text-gray-400">
+                      Showing {services.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to{' '}
+                      {Math.min(currentPage * itemsPerPage, total)} of {total} services
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm text-gray-400">Items per page:</label>
+                      <select
+                        value={itemsPerPage}
+                        onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                        className="px-3 py-1 bg-gray-700 border border-gray-600 rounded-lg text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value={6}>6</option>
+                        <option value={12}>12</option>
+                        <option value={24}>24</option>
+                        <option value={48}>48</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className="px-4 py-2 border border-gray-600 rounded-lg font-medium text-gray-300 hover:bg-gray-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                    >
+                      <FontAwesomeIcon icon={faChevronLeft} />
+                      <span>Previous</span>
+                    </button>
+
+                    <div className="flex items-center space-x-1">
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum: number
+                        if (totalPages <= 5) {
+                          pageNum = i + 1
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i
+                        } else {
+                          pageNum = currentPage - 2 + i
+                        }
+
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => setCurrentPage(pageNum)}
+                            className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                              currentPage === pageNum
+                                ? 'bg-blue-600 text-white shadow-md'
+                                : 'border border-gray-600 text-gray-300 hover:bg-gray-700'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    <button
+                      onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className="px-4 py-2 border border-gray-600 rounded-lg font-medium text-gray-300 hover:bg-gray-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                    >
+                      <span>Next</span>
+                      <FontAwesomeIcon icon={faChevronRight} />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

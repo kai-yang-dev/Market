@@ -32,7 +32,7 @@ function Services() {
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [total, setTotal] = useState(0)
-  const itemsPerPage = 10
+  const [itemsPerPage, setItemsPerPage] = useState(10)
 
   // Calculate total service count (sum of all category service counts)
   const totalServiceCount = categories.reduce((sum, category) => {
@@ -44,8 +44,8 @@ function Services() {
   }, [])
 
   useEffect(() => {
-    setCurrentPage(1) // Reset to first page when filters change
-  }, [statusFilter, selectedCategory])
+    setCurrentPage(1) // Reset to first page when filters or page size change
+  }, [statusFilter, selectedCategory, itemsPerPage])
 
   useEffect(() => {
     setCurrentPage(1) // Reset to first page when search changes
@@ -57,7 +57,7 @@ function Services() {
     }, searchTerm ? 300 : 0) // Only delay if there's a search term
     return () => clearTimeout(timeoutId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, statusFilter, selectedCategory, searchTerm])
+  }, [currentPage, statusFilter, selectedCategory, searchTerm, itemsPerPage])
 
   const fetchCategories = async () => {
     try {
@@ -418,12 +418,27 @@ function Services() {
         )}
 
         {/* Pagination */}
-        {!loading && totalPages > 1 && (
+        {!loading && (
           <div className="bg-gray-800 rounded-xl shadow-md p-6 mt-8">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="text-sm text-gray-400">
-                Showing {services.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to{' '}
-                {Math.min(currentPage * itemsPerPage, total)} of {total} services
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                <div className="text-sm text-gray-400">
+                  Showing {services.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to{' '}
+                  {Math.min(currentPage * itemsPerPage, total)} of {total} services
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-400">Items per page:</label>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                    className="px-3 py-1 bg-gray-700 border border-gray-600 rounded-lg text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
               </div>
               <div className="flex items-center space-x-2">
                 <button
