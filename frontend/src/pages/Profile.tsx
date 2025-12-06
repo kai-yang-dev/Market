@@ -25,6 +25,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import { useAppSelector, useAppDispatch } from '../store/hooks'
 import { updateUser, User as UserType } from '../store/slices/authSlice'
+import { showToast } from '../utils/toast'
 import {
   authApi,
   serviceApi,
@@ -136,6 +137,7 @@ function Profile() {
         }
       } catch (error) {
         console.error(`Failed to fetch ${activeTab}:`, error)
+        showToast.error(`Failed to load ${activeTab}`)
       } finally {
         setLoadingData(false)
       }
@@ -152,8 +154,11 @@ function Profile() {
       setUser(updatedProfile)
       dispatch(updateUser(updatedProfile))
       setIsEditing(false)
+      showToast.success('Profile updated successfully!')
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to update profile')
+      const errorMessage = err.response?.data?.message || 'Failed to update profile'
+      setError(errorMessage)
+      showToast.error(errorMessage)
     } finally {
       setSaving(false)
     }

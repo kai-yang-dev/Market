@@ -4,6 +4,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPlus, faTimes, faUpload, faSpinner } from '@fortawesome/free-solid-svg-icons'
 import { useAppSelector } from '../store/hooks'
 import { categoryApi, serviceApi, Category } from '../services/api'
+import { showToast } from '../utils/toast'
 
 function CreateService() {
   const navigate = useNavigate()
@@ -38,7 +39,7 @@ function CreateService() {
       setCategories(data)
     } catch (error) {
       console.error('Failed to fetch categories:', error)
-      alert('Failed to load categories')
+      showToast.error('Failed to load categories')
     }
   }
 
@@ -136,10 +137,12 @@ function CreateService() {
         },
         imageFile!,
       )
+      showToast.success('Service created successfully!')
       navigate('/services')
     } catch (error: any) {
       console.error('Failed to create service:', error)
-      alert(error.response?.data?.message || 'Failed to create service')
+      const errorMessage = error.response?.data?.message || 'Failed to create service'
+      showToast.error(errorMessage)
     } finally {
       setSubmitting(false)
     }
