@@ -7,6 +7,7 @@ import { Message } from '../entities/message.entity';
 import { CreateMilestoneDto } from './dto/create-milestone.dto';
 import { UpdateMilestoneStatusDto } from './dto/update-milestone-status.dto';
 import { ChatGateway } from '../chat/chat.gateway';
+import { WalletService } from '../wallet/wallet.service';
 
 @Injectable()
 export class MilestoneService {
@@ -19,6 +20,7 @@ export class MilestoneService {
     private messageRepository: Repository<Message>,
     @Inject(forwardRef(() => ChatGateway))
     private chatGateway: ChatGateway,
+    private walletService: WalletService,
   ) {}
 
   async create(conversationId: string, userId: string, createMilestoneDto: CreateMilestoneDto): Promise<Milestone> {
@@ -48,6 +50,20 @@ export class MilestoneService {
     });
 
     const savedMilestone = await this.milestoneRepository.save(milestone);
+    
+    // Get client wallet
+    const clientWallet = await this.walletService.getUserWallet(userId);
+    if (!clientWallet) {
+      throw new BadRequestException('Please connect your wallet before creating a milestone');
+    }
+
+    // Create payment transaction (payment will be processed from frontend)
+    await this.walletService.processMilestonePayment(
+      savedMilestone.id,
+      clientWallet.walletAddress,
+      createMilestoneDto.balance,
+      userId,
+    );
     
     // Emit milestone update via WebSocket
     this.chatGateway.emitMilestoneUpdate(conversationId, savedMilestone).catch((error) => {
@@ -110,6 +126,9 @@ export class MilestoneService {
 
     milestone.status = updateStatusDto.status;
     const savedMilestone = await this.milestoneRepository.save(milestone);
+    
+    // Handle payment flows based on status change
+    await this.handlePaymentFlow(savedMilestone, oldStatus, updateStatusDto.status);
     
     // Find conversation ID from milestone
     const milestoneWithConversation = await this.milestoneRepository.findOne({
@@ -205,6 +224,45 @@ export class MilestoneService {
       
       default:
         return [];
+    }
+  }
+
+  private async handlePaymentFlow(
+    milestone: Milestone,
+    oldStatus: MilestoneStatus,
+    newStatus: MilestoneStatus,
+  ): Promise<void> {
+    try {
+      // Release payment to provider when milestone is released
+      if (newStatus === MilestoneStatus.RELEASED && oldStatus !== MilestoneStatus.RELEASED) {
+        const providerWallet = await this.walletService.getUserWallet(milestone.providerId);
+        if (providerWallet) {
+          await this.walletService.releasePaymentToProvider(
+            milestone.id,
+            providerWallet.walletAddress,
+            milestone.providerId,
+          );
+        }
+      }
+
+      // Refund payment to client when milestone is withdrawn or canceled
+      if (
+        (newStatus === MilestoneStatus.WITHDRAW || newStatus === MilestoneStatus.CANCELED) &&
+        oldStatus !== MilestoneStatus.WITHDRAW &&
+        oldStatus !== MilestoneStatus.CANCELED
+      ) {
+        const clientWallet = await this.walletService.getUserWallet(milestone.clientId);
+        if (clientWallet) {
+          await this.walletService.refundPaymentToClient(
+            milestone.id,
+            clientWallet.walletAddress,
+            milestone.clientId,
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error handling payment flow:', error);
+      // Don't throw - payment errors shouldn't block status updates
     }
   }
 }

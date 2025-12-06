@@ -22,6 +22,11 @@ import { Post } from './entities/post.entity';
 import { PostLike } from './entities/post-like.entity';
 import { PostComment } from './entities/post-comment.entity';
 import { PostCommentLike } from './entities/post-comment-like.entity';
+import { Wallet } from './entities/wallet.entity';
+import { Transaction } from './entities/transaction.entity';
+import { TempWallet } from './entities/temp-wallet.entity';
+import { WalletModule } from './wallet/wallet.module';
+import { PaymentModule } from './payment/payment.module';
 
 @Module({
   imports: [
@@ -32,7 +37,7 @@ import { PostCommentLike } from './entities/post-comment-like.entity';
       username: 'root',
       password: 'Csh104729!',
       database: 'market',
-      entities: [User, Category, Service, Tag, Conversation, Message, Milestone, Post, PostLike, PostComment, PostCommentLike],
+      entities: [User, Category, Service, Tag, Conversation, Message, Milestone, Post, PostLike, PostComment, PostCommentLike, Wallet, Transaction, TempWallet],
       synchronize: true, // Set to false in production
       logging: true,
     }),
@@ -45,6 +50,8 @@ import { PostCommentLike } from './entities/post-comment-like.entity';
     MilestoneModule,
     ChatModule,
     BlogModule,
+    WalletModule,
+    PaymentModule,
   ],
   controllers: [AppController],
   providers: [AppService],

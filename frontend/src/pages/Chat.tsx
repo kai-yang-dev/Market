@@ -18,10 +18,11 @@ import {
   faSmile,
   faPaperclip,
 } from '@fortawesome/free-solid-svg-icons'
-import { conversationApi, messageApi, milestoneApi, Conversation, Message, Milestone } from '../services/api'
+import { conversationApi, messageApi, milestoneApi, walletApi, Conversation, Message, Milestone } from '../services/api'
 import { useAppSelector } from '../store/hooks'
 import { getSocket, disconnectSocket } from '../services/socket'
 import { Socket } from 'socket.io-client'
+import { transferUSDT } from '../utils/tronWeb'
 import { showToast } from '../utils/toast'
 
 function Chat() {
@@ -46,9 +47,9 @@ function Chat() {
   const socketRef = useRef<Socket | null>(null)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set())
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const typingTimeoutRef = useRef<number | null>(null)
   const emojiPickerRef = useRef<HTMLDivElement>(null)
-  const markReadTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const markReadTimeoutRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (id) {
@@ -382,12 +383,40 @@ function Chat() {
     if (!conversation || !milestoneForm.title || !milestoneForm.description || !milestoneForm.balance) return
 
     try {
-      await milestoneApi.create(id!, {
+      // Check if wallet is connected
+      const wallet = await walletApi.getMyWallet()
+      if (!wallet || !wallet.walletAddress) {
+        showToast.error('Please connect your wallet before creating a milestone')
+        return
+      }
+
+      const amount = parseFloat(milestoneForm.balance)
+      
+      // Create milestone (this will create temp wallet and payment transaction)
+      const milestone = await milestoneApi.create(id!, {
         serviceId: conversation.serviceId,
         title: milestoneForm.title,
         description: milestoneForm.description,
-        balance: parseFloat(milestoneForm.balance),
+        balance: amount,
       })
+
+      // Get the payment transaction
+      const transactions = await walletApi.getMilestoneTransactions(milestone.id)
+      const paymentTransaction = transactions.find(tx => tx.type === 'payment' && tx.status === 'pending')
+      
+      if (!paymentTransaction) {
+        throw new Error('Payment transaction not found')
+      }
+
+      // Transfer USDT from user wallet to temp wallet
+      showToast.info('Please confirm the transaction in your wallet...')
+      const txHash = await transferUSDT(paymentTransaction.toWalletAddress, amount)
+      
+      // Update transaction with hash
+      await walletApi.updateTransactionHash(paymentTransaction.id, txHash)
+      
+      showToast.success('Milestone created and payment processed successfully!')
+      
       setMilestoneForm({ title: '', description: '', balance: '' })
       setShowMilestoneForm(false)
       await fetchMilestones()
@@ -396,9 +425,9 @@ function Chat() {
       if (socketRef.current) {
         socketRef.current.emit('milestone_updated', { conversationId: id })
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create milestone:', error)
-      alert('Failed to create milestone. Please try again.')
+      showToast.error(error.message || 'Failed to create milestone. Please try again.')
     }
   }
 
@@ -549,10 +578,10 @@ function Chat() {
   const isClient = conversation.clientId === user?.id
 
   return (
-    <div className="bg-[#0e1621] h-[calc(100vh-4rem)]">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 h-full flex">
+    <div className="mx-auto fixed inset-0 bg-[#0e1621] flex flex-col pt-16">
+      <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0">
           {/* Header - Telegram Style */}
           <div className="bg-[#17212b] border-b border-[#0e1621] px-4 py-3 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center space-x-3 flex-1 min-w-0">
@@ -593,9 +622,9 @@ function Chat() {
           </button>
         </div>
 
-        {/* Messages Area - Telegram Style */}
-        <div className="flex-1 overflow-y-auto bg-[#0e1621] relative">
-          <div className="absolute inset-0 bg-gradient-to-b from-[#0e1621] via-[#0e1621] to-[#17212b] opacity-50 pointer-events-none"></div>
+          {/* Messages Area - Telegram Style */}
+          <div className="flex-1 overflow-y-auto bg-[#0e1621] relative min-h-0">
+            <div className="absolute inset-0 bg-gradient-to-b from-[#0e1621] via-[#0e1621] to-[#17212b] opacity-50 pointer-events-none"></div>
           <div className="relative p-4 space-y-1">
             {(() => {
               // Combine messages and milestones, sorted by creation time
@@ -792,8 +821,8 @@ function Chat() {
         </div>
 
         {/* Milestones Sidebar - Telegram Style */}
-        <div className="w-80 bg-[#17212b] border-l border-[#0e1621] flex flex-col flex-shrink-0">
-        <div className="p-4 border-b border-[#0e1621]">
+        <div className="w-80 bg-[#17212b] border-l border-[#0e1621] flex flex-col flex-shrink-0 min-h-0">
+          <div className="p-4 border-b border-[#0e1621] flex-shrink-0">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-[#e4ecf0]">Milestones</h3>
             {isClient && (
@@ -849,8 +878,8 @@ function Chat() {
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {milestones.length === 0 ? (
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
+            {milestones.length === 0 ? (
             <p className="text-[#708499] text-center text-sm py-8">No milestones yet</p>
           ) : (
             milestones.map((milestone) => (
@@ -962,7 +991,7 @@ function Chat() {
               </div>
             ))
           )}
-        </div>
+          </div>
         </div>
       </div>
     </div>
