@@ -12,6 +12,7 @@ import {
 import { faHeart as faHeartRegular } from '@fortawesome/free-regular-svg-icons'
 import { useAppSelector } from '../store/hooks'
 import { blogApi, Post, PostComment } from '../services/api'
+import { showToast } from '../utils/toast'
 
 const PostCard = ({ post, onLike, onComment }: { post: Post; onLike: (postId: string) => void; onComment: (postId: string, content: string) => void }) => {
   const [showComments, setShowComments] = useState(false)
@@ -29,6 +30,7 @@ const PostCard = ({ post, onLike, onComment }: { post: Post; onLike: (postId: st
         setComments(data)
       } catch (error) {
         console.error('Failed to load comments:', error)
+        showToast.error('Failed to load comments')
       } finally {
         setLoadingComments(false)
       }
@@ -45,8 +47,10 @@ const PostCard = ({ post, onLike, onComment }: { post: Post; onLike: (postId: st
       const newComment = await blogApi.createComment(post.id, { content: commentText.trim() })
       setComments([newComment, ...comments])
       setCommentText('')
+      showToast.success('Comment added!')
     } catch (error) {
       console.error('Failed to create comment:', error)
+      showToast.error('Failed to add comment')
     } finally {
       setSubmittingComment(false)
     }
@@ -293,7 +297,7 @@ function Feed() {
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     if (files.length > 10) {
-      alert('Maximum 10 images allowed')
+      showToast.warning('Maximum 10 images allowed')
       return
     }
 
@@ -322,8 +326,10 @@ function Feed() {
       setPostImages([])
       setImagePreviews([])
       setIsCreatingPost(false)
+      showToast.success('Post created successfully!')
     } catch (error) {
       console.error('Failed to create post:', error)
+      showToast.error('Failed to create post')
     } finally {
       setSubmittingPost(false)
     }

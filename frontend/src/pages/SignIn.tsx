@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { authApi } from '../services/api';
 import { useAppDispatch } from '../store/hooks';
 import { setCredentials } from '../store/slices/authSlice';
+import { showToast } from '../utils/toast';
 
 function SignIn() {
   const navigate = useNavigate();
@@ -22,9 +23,12 @@ function SignIn() {
     try {
       const response = await authApi.signIn(formData);
       dispatch(setCredentials({ user: response.user, accessToken: response.accessToken }));
+      showToast.success('Welcome back!');
       navigate('/');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Invalid email or password');
+      const errorMessage = err.response?.data?.message || 'Invalid email or password';
+      setError(errorMessage);
+      showToast.error(errorMessage);
     } finally {
       setLoading(false);
     }

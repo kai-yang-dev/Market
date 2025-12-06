@@ -22,6 +22,7 @@ import { conversationApi, messageApi, milestoneApi, Conversation, Message, Miles
 import { useAppSelector } from '../store/hooks'
 import { getSocket, disconnectSocket } from '../services/socket'
 import { Socket } from 'socket.io-client'
+import { showToast } from '../utils/toast'
 
 function Chat() {
   const { id } = useParams<{ id: string }>()
@@ -319,6 +320,7 @@ function Chat() {
       setConversation(data)
     } catch (error) {
       console.error('Failed to fetch conversation:', error)
+      showToast.error('Failed to load conversation')
       navigate('/services')
     } finally {
       setLoading(false)
@@ -331,6 +333,7 @@ function Chat() {
       setMessages(data)
     } catch (error) {
       console.error('Failed to fetch messages:', error)
+      showToast.error('Failed to load messages')
     }
   }
 
@@ -340,6 +343,7 @@ function Chat() {
       setMilestones(data)
     } catch (error) {
       console.error('Failed to fetch milestones:', error)
+      showToast.error('Failed to load milestones')
     }
   }
 
@@ -368,7 +372,7 @@ function Chat() {
       }
     } catch (error) {
       console.error('Failed to send message:', error)
-      alert('Failed to send message. Please try again.')
+      showToast.error('Failed to send message. Please try again.')
     } finally {
       setSending(false)
     }

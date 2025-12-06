@@ -1,9 +1,13 @@
 import { ReactNode, useState, useRef, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronDown, faList, faUser, faSignOutAlt, faUserCircle } from '@fortawesome/free-solid-svg-icons'
 import { useAppSelector, useAppDispatch } from '../store/hooks'
 import { logout } from '../store/slices/authSlice'
+import { showToast } from '../utils/toast'
+import { getSocket } from '../services/socket'
+import { Message } from '../services/api'
+import { Socket } from 'socket.io-client'
 
 interface LayoutProps {
   children: ReactNode
@@ -11,15 +15,18 @@ interface LayoutProps {
 
 function Layout({ children }: LayoutProps) {
   const navigate = useNavigate()
+  const location = useLocation()
   const dispatch = useAppDispatch()
   const { user, isAuthenticated } = useAppSelector((state) => state.auth)
   const [servicesDropdownOpen, setServicesDropdownOpen] = useState(false)
   const [userDropdownOpen, setUserDropdownOpen] = useState(false)
   const servicesDropdownRef = useRef<HTMLDivElement>(null)
   const userDropdownRef = useRef<HTMLDivElement>(null)
+  const socketRef = useRef<Socket | null>(null)
 
   const handleSignOut = () => {
     dispatch(logout())
+    showToast.info('You have been logged out')
     navigate('/signin')
   }
 
@@ -39,6 +46,71 @@ function Layout({ children }: LayoutProps) {
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [])
+
+  // Set up global socket listener for incoming messages
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      return
+    }
+
+    const socket = getSocket()
+    if (!socket) {
+      return
+    }
+
+    socketRef.current = socket
+
+    // Listen for new messages globally
+    const handleNewMessage = (message: Message) => {
+      // Don't show notification if message is from current user
+      if (message.senderId === user.id) {
+        return
+      }
+
+      // Check if user is currently on the chat page for this conversation
+      const isOnChatPage = location.pathname.startsWith('/chat/')
+      const currentChatId = location.pathname.split('/chat/')[1]
+      
+      // Only show toast if not on chat page, or if on a different chat page
+      if (!isOnChatPage || (isOnChatPage && message.conversationId !== currentChatId)) {
+        // Get sender name
+        const senderName = message.sender
+          ? `${message.sender.firstName || ''} ${message.sender.lastName || ''}`.trim() || message.sender.userName || 'Someone'
+          : 'Someone'
+        
+        // Truncate message if too long
+        const messagePreview = message.message.length > 50 
+          ? message.message.substring(0, 50) + '...'
+          : message.message
+
+        // Show toast notification with click handler to navigate to chat
+        const toastContent = (
+          <div 
+            onClick={() => navigate(`/chat/${message.conversationId}`)}
+            className="cursor-pointer hover:opacity-80 transition-opacity"
+          >
+            <div className="font-semibold text-white">{senderName}</div>
+            <div className="text-sm opacity-90 text-gray-200 mt-1">{messagePreview}</div>
+          </div>
+        )
+        
+        showToast.info(toastContent, {
+          onClick: () => navigate(`/chat/${message.conversationId}`),
+          autoClose: 5000,
+        })
+      }
+    }
+
+    // Set up listener - socket.on can be called even if not connected yet
+    socket.on('new_message', handleNewMessage)
+
+    // Cleanup on unmount
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.off('new_message', handleNewMessage)
+      }
+    }
+  }, [isAuthenticated, user, location.pathname, navigate])
 
   return (
     <div className="min-h-screen bg-gray-900">

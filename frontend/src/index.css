@@ -20,3 +20,34 @@ code {
     monospace;
 }
 
+/* Custom Toast Styles */
+.Toastify__toast-theme--dark {
+  background-color: #1f2937 !important;
+  color: #f3f4f6 !important;
+  border: 1px solid #374151;
+}
+
+.Toastify__toast--success {
+  background-color: #065f46 !important;
+  border-color: #10b981;
+}
+
+.Toastify__toast--error {
+  background-color: #7f1d1d !important;
+  border-color: #ef4444;
+}
+
+.Toastify__toast--info {
+  background-color: #1e3a8a !important;
+  border-color: #3b82f6;
+}
+
+.Toastify__toast--warning {
+  background-color: #78350f !important;
+  border-color: #f59e0b;
+}
+
+.Toastify__progress-bar {
+  background: rgba(255, 255, 255, 0.3) !important;
+}
+

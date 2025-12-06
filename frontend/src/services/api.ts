@@ -1,4 +1,5 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
+import { showToast } from '../utils/toast';
 
 // Use proxy path in development (Vite will proxy /api to backend)
 // In production, update this to your backend URL
@@ -19,6 +20,42 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Handle API errors globally
+api.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => {
+    // Don't show toast for 401 errors (handled by auth flow)
+    // Don't show toast if error response is already handled in component
+    if (error.response) {
+      const status = error.response.status;
+      const message = (error.response.data as any)?.message || error.message;
+
+      // Only show toast for certain error types
+      if (status === 401) {
+        // Unauthorized - user will be redirected to sign in
+        // Don't show toast here to avoid duplicate messages
+      } else if (status === 403) {
+        showToast.error('You do not have permission to perform this action');
+      } else if (status === 404) {
+        showToast.error('Resource not found');
+      } else if (status >= 500) {
+        showToast.error('Server error. Please try again later');
+      } else if (status >= 400 && message) {
+        // For other 4xx errors, show the message if available
+        // Components can still override this with their own error handling
+      }
+    } else if (error.request) {
+      // Network error
+      showToast.error('Network error. Please check your connection');
+    } else {
+      // Something else happened
+      showToast.error('An unexpected error occurred');
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 export interface SignUpStep1Data {
   email: string;
