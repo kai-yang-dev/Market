@@ -6,11 +6,13 @@ import { Milestone } from '../entities/milestone.entity';
 import { Conversation } from '../entities/conversation.entity';
 import { Message } from '../entities/message.entity';
 import { ChatModule } from '../chat/chat.module';
+import { WalletModule } from '../wallet/wallet.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Milestone, Conversation, Message]),
     forwardRef(() => ChatModule),
+    WalletModule,
   ],
   controllers: [MilestoneController],
   providers: [MilestoneService],

@@ -666,5 +666,69 @@ export const milestoneApi = {
   },
 };
 
+export interface Wallet {
+  id: string;
+  userId: string;
+  walletAddress: string;
+  walletType: string;
+  isConnected: boolean;
+  connectedAt?: string;
+  balance?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Transaction {
+  id: string;
+  milestoneId?: string;
+  fromUserId?: string;
+  toUserId?: string;
+  fromWalletAddress: string;
+  toWalletAddress: string;
+  amount: number;
+  tokenType: string;
+  tokenStandard: string;
+  type: 'payment' | 'release' | 'refund' | 'withdraw';
+  status: 'pending' | 'completed' | 'failed';
+  txHash?: string;
+  blockNumber?: number;
+  error?: string;
+  tempWalletAddress?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const walletApi = {
+  connect: async (walletAddress: string): Promise<Wallet> => {
+    const response = await api.post('/wallet/connect', { walletAddress });
+    return response.data;
+  },
+
+  getMyWallet: async (): Promise<Wallet | null> => {
+    const response = await api.get('/wallet/me');
+    return response.data;
+  },
+
+  getBalance: async (address: string): Promise<{ address: string; balance: number }> => {
+    const response = await api.get(`/wallet/balance/${address}`);
+    return response.data;
+  },
+
+  getTransactions: async (): Promise<Transaction[]> => {
+    const response = await api.get('/wallet/transactions');
+    return response.data;
+  },
+
+  getMilestoneTransactions: async (milestoneId: string): Promise<Transaction[]> => {
+    const response = await api.get(`/wallet/transactions/milestone/${milestoneId}`);
+    return response.data;
+  },
+
+  updateTransactionHash: async (transactionId: string, txHash: string): Promise<Transaction> => {
+    const response = await api.patch(`/wallet/transactions/${transactionId}/hash`, { txHash });
+    return response.data;
+  },
+};
+
 export default api;
 

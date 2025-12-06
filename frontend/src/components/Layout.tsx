@@ -1,9 +1,10 @@
 import { ReactNode, useState, useRef, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faChevronDown, faList, faUser, faSignOutAlt, faUserCircle } from '@fortawesome/free-solid-svg-icons'
+import { faChevronDown, faList, faUser, faSignOutAlt, faUserCircle, faWallet } from '@fortawesome/free-solid-svg-icons'
 import { useAppSelector, useAppDispatch } from '../store/hooks'
 import { logout } from '../store/slices/authSlice'
+import { fetchWallet, connectWallet, refreshBalance } from '../store/slices/walletSlice'
 import { showToast } from '../utils/toast'
 import { getSocket } from '../services/socket'
 import { Message } from '../services/api'
@@ -19,10 +20,13 @@ function Layout({ children }: LayoutProps) {
   const location = useLocation()
   const dispatch = useAppDispatch()
   const { user, isAuthenticated } = useAppSelector((state) => state.auth)
+  const { wallet, balance, isConnecting, isConnected } = useAppSelector((state) => state.wallet)
   const [servicesDropdownOpen, setServicesDropdownOpen] = useState(false)
   const [userDropdownOpen, setUserDropdownOpen] = useState(false)
+  const [walletDropdownOpen, setWalletDropdownOpen] = useState(false)
   const servicesDropdownRef = useRef<HTMLDivElement>(null)
   const userDropdownRef = useRef<HTMLDivElement>(null)
+  const walletDropdownRef = useRef<HTMLDivElement>(null)
   const socketRef = useRef<Socket | null>(null)
 
   const handleSignOut = () => {
@@ -30,6 +34,32 @@ function Layout({ children }: LayoutProps) {
     showToast.info('You have been logged out')
     navigate('/signin')
   }
+
+  const handleConnectWallet = async () => {
+    try {
+      await dispatch(connectWallet()).unwrap()
+    } catch (error) {
+      // Error already handled in thunk
+    }
+  }
+
+  const handleRefreshBalance = async () => {
+    if (wallet?.walletAddress) {
+      try {
+        await dispatch(refreshBalance(wallet.walletAddress)).unwrap()
+        showToast.success('Balance refreshed')
+      } catch (error) {
+        showToast.error('Failed to refresh balance')
+      }
+    }
+  }
+
+  // Fetch wallet on mount if authenticated
+  useEffect(() => {
+    if (isAuthenticated && !wallet) {
+      dispatch(fetchWallet())
+    }
+  }, [isAuthenticated, dispatch, wallet])
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -39,6 +69,9 @@ function Layout({ children }: LayoutProps) {
       }
       if (userDropdownRef.current && !userDropdownRef.current.contains(event.target as Node)) {
         setUserDropdownOpen(false)
+      }
+      if (walletDropdownRef.current && !walletDropdownRef.current.contains(event.target as Node)) {
+        setWalletDropdownOpen(false)
       }
     }
 
@@ -173,6 +206,80 @@ function Layout({ children }: LayoutProps) {
             <div className="flex items-center space-x-4">
               {isAuthenticated && user ? (
                 <>
+                  {/* Wallet Info */}
+                  <div className="relative" ref={walletDropdownRef}>
+                    {isConnected && wallet ? (
+                      <button
+                        onClick={() => setWalletDropdownOpen(!walletDropdownOpen)}
+                        className="flex items-center space-x-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                      >
+                        <FontAwesomeIcon icon={faWallet} className="text-blue-400" />
+                        <div className="text-left hidden sm:block">
+                          <div className="text-xs text-gray-400">Wallet</div>
+                          <div className="text-sm font-medium text-white">
+                            {wallet.walletAddress.slice(0, 6)}...{wallet.walletAddress.slice(-4)}
+                          </div>
+                          {balance !== null && (
+                            <div className="text-xs text-green-400">
+                              {balance.toFixed(2)} USDT
+                            </div>
+                          )}
+                        </div>
+                        <FontAwesomeIcon
+                          icon={faChevronDown}
+                          className={`text-xs text-gray-400 transition-transform ${walletDropdownOpen ? 'rotate-180' : ''}`}
+                        />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleConnectWallet}
+                        disabled={isConnecting}
+                        className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg transition-all shadow-md disabled:opacity-50"
+                      >
+                        <FontAwesomeIcon icon={faWallet} />
+                        <span className="text-sm font-medium text-white">
+                          {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+                        </span>
+                      </button>
+                    )}
+                    {walletDropdownOpen && wallet && (
+                      <div className="absolute top-full right-0 mt-2 w-64 bg-gray-800 rounded-lg shadow-lg border border-gray-700 py-2 z-50">
+                        <div className="px-4 py-2 border-b border-gray-700">
+                          <div className="text-xs text-gray-400 mb-1">Wallet Address</div>
+                          <div className="text-sm text-white font-mono break-all">
+                            {wallet.walletAddress}
+                          </div>
+                        </div>
+                        <div className="px-4 py-2 border-b border-gray-700">
+                          <div className="text-xs text-gray-400 mb-1">Balance</div>
+                          <div className="text-lg font-semibold text-green-400">
+                            {balance !== null ? `${balance.toFixed(2)} USDT` : 'Loading...'}
+                          </div>
+                        </div>
+                        <button
+                          onClick={handleRefreshBalance}
+                          className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-blue-400 transition-colors text-sm"
+                        >
+                          Refresh Balance
+                        </button>
+                        <Link
+                          to="/transactions"
+                          onClick={() => setWalletDropdownOpen(false)}
+                          className="block px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-blue-400 transition-colors text-sm"
+                        >
+                          Transaction History
+                        </Link>
+                        <a
+                          href={`https://tronscan.org/#/address/${wallet.walletAddress}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-blue-400 transition-colors text-sm"
+                        >
+                          View on TronScan
+                        </a>
+                      </div>
+                    )}
+                  </div>
                   <div className="relative">
                     <button className="p-2 text-gray-300 hover:text-blue-400 relative">
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

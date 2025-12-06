@@ -18,10 +18,11 @@ import {
   faSmile,
   faPaperclip,
 } from '@fortawesome/free-solid-svg-icons'
-import { conversationApi, messageApi, milestoneApi, Conversation, Message, Milestone } from '../services/api'
+import { conversationApi, messageApi, milestoneApi, walletApi, Conversation, Message, Milestone } from '../services/api'
 import { useAppSelector } from '../store/hooks'
 import { getSocket, disconnectSocket } from '../services/socket'
 import { Socket } from 'socket.io-client'
+import { transferUSDT } from '../utils/tronWeb'
 import { showToast } from '../utils/toast'
 
 function Chat() {
@@ -382,12 +383,40 @@ function Chat() {
     if (!conversation || !milestoneForm.title || !milestoneForm.description || !milestoneForm.balance) return
 
     try {
-      await milestoneApi.create(id!, {
+      // Check if wallet is connected
+      const wallet = await walletApi.getMyWallet()
+      if (!wallet || !wallet.walletAddress) {
+        showToast.error('Please connect your wallet before creating a milestone')
+        return
+      }
+
+      const amount = parseFloat(milestoneForm.balance)
+      
+      // Create milestone (this will create temp wallet and payment transaction)
+      const milestone = await milestoneApi.create(id!, {
         serviceId: conversation.serviceId,
         title: milestoneForm.title,
         description: milestoneForm.description,
-        balance: parseFloat(milestoneForm.balance),
+        balance: amount,
       })
+
+      // Get the payment transaction
+      const transactions = await walletApi.getMilestoneTransactions(milestone.id)
+      const paymentTransaction = transactions.find(tx => tx.type === 'payment' && tx.status === 'pending')
+      
+      if (!paymentTransaction) {
+        throw new Error('Payment transaction not found')
+      }
+
+      // Transfer USDT from user wallet to temp wallet
+      showToast.info('Please confirm the transaction in your wallet...')
+      const txHash = await transferUSDT(paymentTransaction.toWalletAddress, amount)
+      
+      // Update transaction with hash
+      await walletApi.updateTransactionHash(paymentTransaction.id, txHash)
+      
+      showToast.success('Milestone created and payment processed successfully!')
+      
       setMilestoneForm({ title: '', description: '', balance: '' })
       setShowMilestoneForm(false)
       await fetchMilestones()
@@ -396,9 +425,9 @@ function Chat() {
       if (socketRef.current) {
         socketRef.current.emit('milestone_updated', { conversationId: id })
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create milestone:', error)
-      alert('Failed to create milestone. Please try again.')
+      showToast.error(error.message || 'Failed to create milestone. Please try again.')
     }
   }
 

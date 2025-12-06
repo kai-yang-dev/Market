@@ -10,6 +10,7 @@ import ServiceDetail from './pages/ServiceDetail'
 import Chat from './pages/Chat'
 import Feed from './pages/Feed'
 import Profile from './pages/Profile'
+import Transactions from './pages/Transactions'
 import Layout from './components/Layout'
 
 function App() {
@@ -32,6 +33,7 @@ function App() {
                 <Route path="/services/:id" element={<ServiceDetail />} />
                 <Route path="/chat/:id" element={<Chat />} />
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/transactions" element={<Transactions />} />
               </Routes>
             </Layout>
           }
