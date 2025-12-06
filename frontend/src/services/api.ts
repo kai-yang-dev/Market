@@ -240,7 +240,13 @@ export const serviceApi = {
     return response.data;
   },
 
-  getAll: async (params?: { status?: string; categoryId?: string; search?: string }): Promise<Service[]> => {
+  getAll: async (params?: { 
+    status?: string; 
+    categoryId?: string; 
+    search?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<Service[]> => {
     const response = await api.get('/services', { params });
     // Backend now returns paginated response: { data: Service[], total, page, limit, totalPages }
     // Extract the data array from the response
@@ -252,6 +258,37 @@ export const serviceApi = {
       return response.data;
     }
     return [];
+  },
+
+  getAllPaginated: async (params?: { 
+    status?: string; 
+    categoryId?: string; 
+    search?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ data: Service[]; total: number; page: number; limit: number; totalPages: number }> => {
+    const response = await api.get('/services', { params });
+    // Backend returns paginated response: { data: Service[], total, page, limit, totalPages }
+    if (response.data && response.data.data && Array.isArray(response.data.data)) {
+      return response.data;
+    }
+    // Fallback: if response is already an array (backward compatibility)
+    if (Array.isArray(response.data)) {
+      return {
+        data: response.data,
+        total: response.data.length,
+        page: 1,
+        limit: response.data.length,
+        totalPages: 1,
+      };
+    }
+    return {
+      data: [],
+      total: 0,
+      page: 1,
+      limit: 10,
+      totalPages: 1,
+    };
   },
 
   getMyServices: async (params?: {

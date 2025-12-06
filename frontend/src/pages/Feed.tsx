@@ -345,16 +345,6 @@ function Feed() {
 
   return (
     <div className="min-h-screen bg-gray-900">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="text-center max-w-3xl mx-auto">
-            <h1 className="text-4xl md:text-5xl font-bold mb-4 drop-shadow-lg">Feed</h1>
-            <p className="text-xl text-blue-100">Share your thoughts and connect with others</p>
-          </div>
-        </div>
-      </div>
-
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-3xl">
         {/* Create Post Card */}
         {isAuthenticated && (

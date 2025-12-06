@@ -260,25 +260,6 @@ function Profile() {
 
   return (
     <div className="min-h-screen bg-gray-900">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="text-center max-w-3xl mx-auto">
-            <div className="w-24 h-24 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-white/30">
-              <span className="text-4xl font-bold text-white">
-                {user.firstName?.[0] || user.email[0].toUpperCase()}
-              </span>
-            </div>
-            <h1 className="text-4xl md:text-5xl font-bold mb-2 drop-shadow-lg">
-              {user.firstName && user.lastName
-                ? `${user.firstName} ${user.lastName}`
-                : user.userName || 'User Profile'}
-            </h1>
-            <p className="text-blue-100 text-lg">{user.email}</p>
-          </div>
-        </div>
-      </div>
-
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-7xl">
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Left Sidebar */}

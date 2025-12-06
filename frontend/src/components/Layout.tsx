@@ -8,6 +8,7 @@ import { showToast } from '../utils/toast'
 import { getSocket } from '../services/socket'
 import { Message } from '../services/api'
 import { Socket } from 'socket.io-client'
+import Footer from './Footer'
 
 interface LayoutProps {
   children: ReactNode
@@ -113,7 +114,7 @@ function Layout({ children }: LayoutProps) {
   }, [isAuthenticated, user, location.pathname, navigate])
 
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="min-h-screen bg-gray-900 flex flex-col">
       <nav className="bg-gray-800 shadow-md sticky top-0 z-50 border-b border-gray-700">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
@@ -243,7 +244,8 @@ function Layout({ children }: LayoutProps) {
           </div>
         </div>
       </nav>
-      <main>{children}</main>
+      <main className="flex-1">{children}</main>
+      <Footer />
     </div>
   )
 }

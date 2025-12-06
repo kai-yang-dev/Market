@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faSearch, faPlus, faSpinner, faEdit, faChevronLeft, faChevronRight, faStar } from '@fortawesome/free-solid-svg-icons'
+import { faPlus, faSpinner, faEdit, faChevronLeft, faChevronRight, faStar } from '@fortawesome/free-solid-svg-icons'
 import { faStar as faStarRegular, faStarHalfStroke } from '@fortawesome/free-regular-svg-icons'
 import { useAppSelector } from '../store/hooks'
 import { categoryApi, serviceApi, Service, Category } from '../services/api'
@@ -27,11 +27,10 @@ const StarRating = ({ rating }: { rating: number }) => {
 
 function MyServices() {
   const navigate = useNavigate()
-  const { isAuthenticated, user } = useAppSelector((state) => state.auth)
+  const { isAuthenticated } = useAppSelector((state) => state.auth)
   const [services, setServices] = useState<Service[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('')
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [currentPage, setCurrentPage] = useState(1)
@@ -57,18 +56,11 @@ function MyServices() {
   }, [statusFilter, selectedCategory])
 
   useEffect(() => {
-    setCurrentPage(1) // Reset to first page when search changes
-  }, [searchTerm])
-
-  useEffect(() => {
     if (isAuthenticated) {
-      const timeoutId = setTimeout(() => {
-        fetchServices()
-      }, searchTerm ? 300 : 0)
-      return () => clearTimeout(timeoutId)
+      fetchServices()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, statusFilter, selectedCategory, searchTerm, isAuthenticated])
+  }, [currentPage, statusFilter, selectedCategory, isAuthenticated])
 
   const fetchCategories = async () => {
     try {
@@ -91,9 +83,6 @@ function MyServices() {
       }
       if (selectedCategory) {
         params.categoryId = selectedCategory
-      }
-      if (searchTerm.trim()) {
-        params.search = searchTerm.trim()
       }
       const response = await serviceApi.getMyServices(params)
       setServices(response.data)
@@ -120,170 +109,149 @@ function MyServices() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="flex flex-col space-y-6">
-            <div className="flex flex-col lg:flex-row items-center justify-between gap-4">
-              {/* Title */}
-              <div className="flex-shrink-0">
-                <h1 className="text-4xl md:text-5xl font-bold mb-2 drop-shadow-lg">My Services</h1>
-                <p className="text-blue-100">Manage your services</p>
-              </div>
-
-              {/* Search Input - Centered */}
-              <div className="relative flex-1 max-w-2xl w-full lg:mx-8">
-                <FontAwesomeIcon
-                  icon={faSearch}
-                  className="absolute left-4 top-1/2 transform -translate-y-1/2 text-blue-200"
-                />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search your services..."
-                  className="w-full pl-12 pr-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-white focus:bg-white/20 transition-all"
-                />
-              </div>
-
-              {/* Create Service Button */}
-              <div className="flex-shrink-0">
-                <Link
-                  to="/services/new"
-                  className="px-8 py-3 bg-white text-blue-600 rounded-lg font-semibold hover:bg-gray-100 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center space-x-2 whitespace-nowrap"
+    <div className="bg-gray-900">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Left Sidebar - Categories */}
+          <div className="w-full lg:w-64 flex-shrink-0">
+            <div className="bg-gray-800 rounded-xl shadow-md p-4 sticky top-4">
+              <h2 className="text-lg font-semibold text-gray-100 mb-4">Categories</h2>
+              <div className="space-y-2">
+                <button
+                  onClick={() => setSelectedCategory('')}
+                  className={`w-full px-4 py-3 rounded-lg font-medium transition-all flex items-center justify-between ${
+                    selectedCategory === ''
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
                 >
-                  <FontAwesomeIcon icon={faPlus} />
-                  <span>Create Service</span>
-                </Link>
+                  <span>All Categories</span>
+                  {totalServiceCount > 0 && (
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                        selectedCategory === ''
+                          ? 'bg-white/20 text-white'
+                          : 'bg-blue-600 text-blue-200'
+                      }`}
+                    >
+                      {totalServiceCount}
+                    </span>
+                  )}
+                </button>
+                {categories.map((category) => (
+                  <button
+                    key={category.id}
+                    onClick={() => setSelectedCategory(category.id)}
+                    className={`w-full px-4 py-3 rounded-lg font-medium transition-all flex items-center justify-between ${
+                      selectedCategory === category.id
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-2">
+                      {category.icon && (
+                        <span className={selectedCategory === category.id ? 'text-white' : 'text-blue-400'}>
+                          {renderIcon(category.icon, 'text-lg')}
+                        </span>
+                      )}
+                      <span>{category.title}</span>
+                    </div>
+                    {category.serviceCount !== undefined && category.serviceCount > 0 && (
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                          selectedCategory === category.id
+                            ? 'bg-white/20 text-white'
+                            : 'bg-blue-600 text-blue-200'
+                        }`}
+                      >
+                        {category.serviceCount}
+                      </span>
+                    )}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Status Filter Bar */}
-        <div className="bg-gray-800 rounded-xl shadow-md p-4 mb-6 overflow-x-auto">
-          <div className="flex items-center space-x-2 min-w-max">
-            <button
-              onClick={() => setStatusFilter('')}
-              className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-all ${
-                statusFilter === ''
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              All Statuses
-            </button>
-            <button
-              onClick={() => setStatusFilter('draft')}
-              className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-all ${
-                statusFilter === 'draft'
-                  ? 'bg-gray-600 text-white shadow-md'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              Draft
-            </button>
-            <button
-              onClick={() => setStatusFilter('active')}
-              className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-all ${
-                statusFilter === 'active'
-                  ? 'bg-green-600 text-white shadow-md'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              Active
-            </button>
-            <button
-              onClick={() => setStatusFilter('blocked')}
-              className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-all ${
-                statusFilter === 'blocked'
-                  ? 'bg-red-600 text-white shadow-md'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              Blocked
-            </button>
-          </div>
-        </div>
-
-        {/* Category Filter Bar */}
-        <div className="bg-gray-800 rounded-xl shadow-md p-4 mb-8 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-700">
-          <div className="flex items-center space-x-2 min-w-max">
-            <button
-              onClick={() => setSelectedCategory('')}
-              className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-all flex items-center space-x-2 ${
-                selectedCategory === ''
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              <span>All Categories</span>
-              {totalServiceCount > 0 && (
-                <span
-                  className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                    selectedCategory === ''
-                      ? 'bg-white/20 text-white'
-                      : 'bg-blue-600 text-blue-200'
-                  }`}
-                >
-                  {totalServiceCount}
-                </span>
-              )}
-            </button>
-            {categories.map((category) => (
-              <button
-                key={category.id}
-                onClick={() => setSelectedCategory(category.id)}
-                className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-all flex items-center space-x-2 ${
-                  selectedCategory === category.id
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
-              >
-                {category.icon && (
-                  <span className={selectedCategory === category.id ? 'text-white' : 'text-blue-400'}>
-                    {renderIcon(category.icon, 'text-lg')}
-                  </span>
-                )}
-                <span>{category.title}</span>
-                {category.serviceCount !== undefined && category.serviceCount > 0 && (
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                      selectedCategory === category.id
-                        ? 'bg-white/20 text-white'
-                        : 'bg-blue-600 text-blue-200'
+          {/* Right Content - Status Filter, Create Button, and Services */}
+          <div className="flex-1 min-w-0">
+            {/* Status Filter and Create Button */}
+            <div className="mb-6 flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-between">
+              {/* Status Filter Bar */}
+              <div className="bg-gray-800 rounded-xl shadow-md p-4 overflow-x-auto flex-1">
+                <div className="flex items-center space-x-2 min-w-max">
+                  <button
+                    onClick={() => setStatusFilter('')}
+                    className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-all ${
+                      statusFilter === ''
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                     }`}
                   >
-                    {category.serviceCount}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
+                    All Statuses
+                  </button>
+                  <button
+                    onClick={() => setStatusFilter('draft')}
+                    className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-all ${
+                      statusFilter === 'draft'
+                        ? 'bg-gray-600 text-white shadow-md'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    Draft
+                  </button>
+                  <button
+                    onClick={() => setStatusFilter('active')}
+                    className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-all ${
+                      statusFilter === 'active'
+                        ? 'bg-green-600 text-white shadow-md'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    Active
+                  </button>
+                  <button
+                    onClick={() => setStatusFilter('blocked')}
+                    className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-all ${
+                      statusFilter === 'blocked'
+                        ? 'bg-red-600 text-white shadow-md'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    Blocked
+                  </button>
+                </div>
+              </div>
 
-        {/* Services Grid */}
-        {loading ? (
-          <div className="text-center py-20 bg-gray-800 rounded-xl shadow-md">
-            <FontAwesomeIcon icon={faSpinner} className="animate-spin text-4xl text-blue-400 mb-4" />
-            <p className="text-gray-400">Loading services...</p>
-          </div>
-        ) : services.length === 0 ? (
-          <div className="text-center py-20 bg-gray-800 rounded-xl shadow-md">
-            <p className="text-gray-400 mb-6 text-lg">No services found</p>
-            <Link
-              to="/services/new"
-              className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-md hover:shadow-lg"
-            >
-              Create Your First Service
-            </Link>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Create Service Button */}
+              <Link
+                to="/services/new"
+                className="inline-flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-md hover:shadow-lg whitespace-nowrap"
+              >
+                <FontAwesomeIcon icon={faPlus} />
+                <span>Create Service</span>
+              </Link>
+            </div>
+
+            {/* Services Grid */}
+            {loading ? (
+              <div className="text-center py-20 bg-gray-800 rounded-xl shadow-md">
+                <FontAwesomeIcon icon={faSpinner} className="animate-spin text-4xl text-blue-400 mb-4" />
+                <p className="text-gray-400">Loading services...</p>
+              </div>
+            ) : services.length === 0 ? (
+              <div className="text-center py-20 bg-gray-800 rounded-xl shadow-md">
+                <p className="text-gray-400 mb-6 text-lg">No services found</p>
+                <Link
+                  to="/services/new"
+                  className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-md hover:shadow-lg"
+                >
+                  Create Your First Service
+                </Link>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {services.map((service) => (
                 <div
                   key={service.id}
@@ -364,67 +332,69 @@ function MyServices() {
               ))}
             </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="bg-gray-800 rounded-xl shadow-md p-6 mt-8">
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="text-sm text-gray-400">
-                    Showing {services.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to{' '}
-                    {Math.min(currentPage * itemsPerPage, total)} of {total} services
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                      disabled={currentPage === 1}
-                      className="px-4 py-2 border border-gray-600 rounded-lg font-medium text-gray-300 hover:bg-gray-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-                    >
-                      <FontAwesomeIcon icon={faChevronLeft} />
-                      <span>Previous</span>
-                    </button>
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="bg-gray-800 rounded-xl shadow-md p-6 mt-8">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                      <div className="text-sm text-gray-400">
+                        Showing {services.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to{' '}
+                        {Math.min(currentPage * itemsPerPage, total)} of {total} services
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                          disabled={currentPage === 1}
+                          className="px-4 py-2 border border-gray-600 rounded-lg font-medium text-gray-300 hover:bg-gray-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                        >
+                          <FontAwesomeIcon icon={faChevronLeft} />
+                          <span>Previous</span>
+                        </button>
 
-                    <div className="flex items-center space-x-1">
-                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        let pageNum: number
-                        if (totalPages <= 5) {
-                          pageNum = i + 1
-                        } else if (currentPage <= 3) {
-                          pageNum = i + 1
-                        } else if (currentPage >= totalPages - 2) {
-                          pageNum = totalPages - 4 + i
-                        } else {
-                          pageNum = currentPage - 2 + i
-                        }
+                        <div className="flex items-center space-x-1">
+                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                            let pageNum: number
+                            if (totalPages <= 5) {
+                              pageNum = i + 1
+                            } else if (currentPage <= 3) {
+                              pageNum = i + 1
+                            } else if (currentPage >= totalPages - 2) {
+                              pageNum = totalPages - 4 + i
+                            } else {
+                              pageNum = currentPage - 2 + i
+                            }
 
-                        return (
-                          <button
-                            key={pageNum}
-                            onClick={() => setCurrentPage(pageNum)}
-                            className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                              currentPage === pageNum
-                                ? 'bg-blue-600 text-white shadow-md'
-                                : 'border border-gray-600 text-gray-300 hover:bg-gray-700'
-                            }`}
-                          >
-                            {pageNum}
-                          </button>
-                        )
-                      })}
+                            return (
+                              <button
+                                key={pageNum}
+                                onClick={() => setCurrentPage(pageNum)}
+                                className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                                  currentPage === pageNum
+                                    ? 'bg-blue-600 text-white shadow-md'
+                                    : 'border border-gray-600 text-gray-300 hover:bg-gray-700'
+                                }`}
+                              >
+                                {pageNum}
+                              </button>
+                            )
+                          })}
+                        </div>
+
+                        <button
+                          onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                          disabled={currentPage === totalPages}
+                          className="px-4 py-2 border border-gray-600 rounded-lg font-medium text-gray-300 hover:bg-gray-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                        >
+                          <span>Next</span>
+                          <FontAwesomeIcon icon={faChevronRight} />
+                        </button>
+                      </div>
                     </div>
-
-                    <button
-                      onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                      disabled={currentPage === totalPages}
-                      className="px-4 py-2 border border-gray-600 rounded-lg font-medium text-gray-300 hover:bg-gray-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-                    >
-                      <span>Next</span>
-                      <FontAwesomeIcon icon={faChevronRight} />
-                    </button>
                   </div>
-                </div>
-              </div>
+                )}
+              </>
             )}
-          </>
-        )}
+          </div>
+        </div>
       </div>
     </div>
   )
