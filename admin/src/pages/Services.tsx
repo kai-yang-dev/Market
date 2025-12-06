@@ -51,10 +51,11 @@ function Services() {
     setCurrentPage(1) // Reset to first page when search changes
   }, [searchTerm])
 
+  // Debounced search effect - only triggers fetch after user stops typing
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       fetchServices()
-    }, searchTerm ? 300 : 0) // Only delay if there's a search term
+    }, searchTerm ? 500 : 0) // 500ms debounce for search, immediate for other filters
     return () => clearTimeout(timeoutId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, statusFilter, selectedCategory, searchTerm, itemsPerPage])

@@ -66,10 +66,11 @@ function Services() {
     setCurrentPage(1)
   }, [searchTerm, selectedCategory, itemsPerPage])
 
+  // Debounced search effect - only triggers fetch after user stops typing
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       fetchServices()
-    }, searchTerm ? 300 : 0)
+    }, searchTerm ? 500 : 0) // 500ms debounce for search, immediate for other filters
     return () => clearTimeout(timeoutId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, searchTerm, selectedCategory, itemsPerPage])
