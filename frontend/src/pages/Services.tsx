@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faSearch, faPlus, faStar, faSpinner } from '@fortawesome/free-solid-svg-icons'
+import { faSearch, faPlus, faStar, faSpinner, faTh, faTable } from '@fortawesome/free-solid-svg-icons'
 import { faStar as faStarRegular, faStarHalfStroke } from '@fortawesome/free-regular-svg-icons'
 import { useAppSelector } from '../store/hooks'
 import { categoryApi, serviceApi, Service, Category } from '../services/api'
 import { renderIcon } from '../utils/iconHelper'
+
+type ViewMode = 'card' | 'table'
+
+const STORAGE_KEY = 'services_view_mode'
 
 const StarRating = ({ rating }: { rating: number }) => {
   const fullStars = Math.floor(rating)
@@ -32,6 +36,12 @@ function Services() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('')
+  
+  // Load view mode from localStorage, default to 'card'
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    return (saved === 'card' || saved === 'table') ? saved : 'card'
+  })
 
   // Calculate total service count (sum of all category service counts)
   const totalServiceCount = categories.reduce((sum, category) => {
@@ -42,6 +52,11 @@ function Services() {
     fetchCategories()
     fetchServices()
   }, [])
+
+  // Save view mode to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, viewMode)
+  }, [viewMode])
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -145,7 +160,7 @@ function Services() {
 
           {/* Right Content - Search, Create Button, and Services */}
           <div className="flex-1 min-w-0">
-            {/* Search Input and Create Button */}
+            {/* Search Input, View Mode Switch, and Create Button */}
             <div className="mb-6 flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
               <div className="relative flex-1">
                 <FontAwesomeIcon
@@ -160,6 +175,33 @@ function Services() {
                   className="w-full pl-12 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 />
               </div>
+              
+              {/* View Mode Switch */}
+              <div className="flex items-center gap-2 bg-gray-800 rounded-lg p-1 border border-gray-700">
+                <button
+                  onClick={() => setViewMode('card')}
+                  className={`p-2 rounded transition-all ${
+                    viewMode === 'card'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                  title="Card View"
+                >
+                  <FontAwesomeIcon icon={faTh} />
+                </button>
+                <button
+                  onClick={() => setViewMode('table')}
+                  className={`p-2 rounded transition-all ${
+                    viewMode === 'table'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                  title="Table View"
+                >
+                  <FontAwesomeIcon icon={faTable} />
+                </button>
+              </div>
+
               {isAuthenticated && (
                 <Link
                   to="/services/new"
@@ -171,7 +213,7 @@ function Services() {
               )}
             </div>
 
-            {/* Services Grid */}
+            {/* Services Display */}
             {loading ? (
               <div className="text-center py-20 bg-gray-800 rounded-xl shadow-md">
                 <FontAwesomeIcon icon={faSpinner} className="animate-spin text-4xl text-blue-400 mb-4" />
@@ -189,7 +231,7 @@ function Services() {
                   </Link>
                 )}
               </div>
-            ) : (
+            ) : viewMode === 'card' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {services.map((service) => (
                   <Link
@@ -270,6 +312,120 @@ function Services() {
                     </div>
                   </Link>
                 ))}
+              </div>
+            ) : (
+              <div className="bg-gray-800 rounded-xl shadow-md overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-700">
+                    <thead className="bg-gradient-to-r from-gray-700 to-gray-800">
+                      <tr>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                          Image
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                          Title
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                          Category
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                          Rating
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                          Price
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                          Tags
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-gray-800 divide-y divide-gray-700">
+                      {services.map((service) => (
+                        <tr key={service.id} className="hover:bg-gray-700 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <Link to={`/services/${service.id}`}>
+                              <div className="w-16 h-16 rounded-lg overflow-hidden relative">
+                                {service.adImage ? (
+                                  <>
+                                    {/* Blurred background */}
+                                    <div
+                                      className="absolute inset-0 bg-cover bg-center filter blur-sm scale-110"
+                                      style={{
+                                        backgroundImage: `url(http://localhost:3000${service.adImage})`,
+                                      }}
+                                    />
+                                    {/* Actual image on top */}
+                                    <div className="relative h-full flex items-center justify-center">
+                                      <img
+                                        src={`http://localhost:3000${service.adImage}`}
+                                        alt={service.title}
+                                        className="max-w-full max-h-full object-contain"
+                                      />
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-gray-700 text-2xl">📦</div>
+                                )}
+                              </div>
+                            </Link>
+                          </td>
+                          <td className="px-6 py-4">
+                            <Link to={`/services/${service.id}`} className="block">
+                              <div className="text-sm font-semibold text-gray-100 max-w-xs truncate hover:text-blue-400 transition-colors">
+                                {service.title}
+                              </div>
+                              <div className="text-xs text-gray-400 mt-1 line-clamp-2 max-w-xs">{service.adText}</div>
+                            </Link>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-100">{service.category?.title || 'N/A'}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <StarRating
+                                rating={
+                                  service.rating
+                                    ? typeof service.rating === 'number'
+                                      ? service.rating
+                                      : parseFloat(service.rating as any)
+                                    : 0
+                                }
+                              />
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-semibold text-blue-400">
+                              ${typeof service.balance === 'number' 
+                                ? (Math.round(service.balance * 100) / 100).toFixed(2)
+                                : (Math.round(parseFloat(service.balance as any) * 100) / 100).toFixed(2)}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            {service.tags && service.tags.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {service.tags.slice(0, 3).map((tag) => (
+                                  <span
+                                    key={tag.id}
+                                    className="px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded-full"
+                                  >
+                                    {tag.title}
+                                  </span>
+                                ))}
+                                {service.tags.length > 3 && (
+                                  <span className="px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded-full">
+                                    +{service.tags.length - 3}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-gray-500">No tags</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>
