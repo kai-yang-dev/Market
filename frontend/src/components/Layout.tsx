@@ -175,7 +175,10 @@ function Layout({ children }: LayoutProps) {
   }, [isAuthenticated, user, location.pathname, navigate])
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: 'linear-gradient(135deg, #0a0f1f 0%, #0f172a 100%)' }}>
+    <div className="min-h-screen flex flex-col" style={{ 
+      backgroundColor: '#0a0f1f',
+      backgroundImage: 'radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.15) 0px, transparent 50%), radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.15) 0px, transparent 50%)'
+    }}>
       {/* Fixed Header with Rounded Container */}
       <header className="fixed top-0 left-0 right-0 z-50 transition-all duration-300 py-3">
         <nav className="container mx-auto px-4 sm:px-6 lg:px-8">
