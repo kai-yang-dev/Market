@@ -1,15 +1,12 @@
-import { ReactNode, useState, useRef, useEffect } from 'react'
+import { ReactNode, useState, useRef, useEffect, useCallback } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faChevronDown, faSignOutAlt, faUserCircle, faWallet, faBars } from '@fortawesome/free-solid-svg-icons'
+import { faChevronDown, faSignOutAlt, faUserCircle, faBars, faWallet } from '@fortawesome/free-solid-svg-icons'
 import { useAppSelector, useAppDispatch } from '../store/hooks'
 import { logout } from '../store/slices/authSlice'
-import { fetchWallet, connectWallet, refreshBalance, setBalance } from '../store/slices/walletSlice'
-import { walletApi } from '../services/api'
-import { getUSDTBalance } from '../utils/tronWeb'
 import { showToast } from '../utils/toast'
 import { getSocket } from '../services/socket'
-import { Message } from '../services/api'
+import { Message, paymentApi, Balance } from '../services/api'
 import { Socket } from 'socket.io-client'
 import Footer from './Footer'
 
@@ -22,14 +19,14 @@ function Layout({ children }: LayoutProps) {
   const location = useLocation()
   const dispatch = useAppDispatch()
   const { user, isAuthenticated } = useAppSelector((state) => state.auth)
-  const { wallet, balance, isConnecting, isConnected } = useAppSelector((state) => state.wallet)
   const [servicesDropdownOpen, setServicesDropdownOpen] = useState(false)
   const [userDropdownOpen, setUserDropdownOpen] = useState(false)
-  const [walletDropdownOpen, setWalletDropdownOpen] = useState(false)
+  const [balanceDropdownOpen, setBalanceDropdownOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [balance, setBalance] = useState<Balance | null>(null)
   const servicesDropdownRef = useRef<HTMLDivElement>(null)
   const userDropdownRef = useRef<HTMLDivElement>(null)
-  const walletDropdownRef = useRef<HTMLDivElement>(null)
+  const balanceDropdownRef = useRef<HTMLDivElement>(null)
   const socketRef = useRef<Socket | null>(null)
 
   const handleSignOut = () => {
@@ -38,46 +35,36 @@ function Layout({ children }: LayoutProps) {
     navigate('/signin')
   }
 
-  const handleConnectWallet = async () => {
-    try {
-      await dispatch(connectWallet()).unwrap()
-    } catch (error) {
-      // Error already handled in thunk
+  // Fetch balance function
+  const refreshBalance = useCallback(() => {
+    if (isAuthenticated && user) {
+      paymentApi.getBalance()
+        .then(setBalance)
+        .catch((error) => {
+          console.error('Failed to fetch balance:', error)
+        })
     }
-  }
+  }, [isAuthenticated, user])
 
-  const handleRefreshBalance = async () => {
-    if (wallet?.walletAddress) {
-      try {
-        await dispatch(refreshBalance(wallet.walletAddress)).unwrap()
-        showToast.success('Balance refreshed')
-      } catch (error) {
-        showToast.error('Failed to refresh balance')
+  // Fetch balance on mount and when auth changes
+  useEffect(() => {
+    refreshBalance()
+  }, [refreshBalance])
+
+  // Listen for balance update events (from Chat page when milestones are created/released)
+  useEffect(() => {
+    const handleBalanceUpdate = () => {
+      // Only refresh if we're on the chat page
+      if (location.pathname.startsWith('/chat/')) {
+        refreshBalance()
       }
     }
-  }
 
-  // Fetch wallet on mount if authenticated
-  useEffect(() => {
-    if (isAuthenticated && !wallet) {
-      dispatch(fetchWallet())
+    window.addEventListener('balance-updated', handleBalanceUpdate)
+    return () => {
+      window.removeEventListener('balance-updated', handleBalanceUpdate)
     }
-  }, [isAuthenticated, dispatch, wallet])
-
-  // Fetch balance if wallet is connected but balance is not loaded
-  useEffect(() => {
-    if (isConnected && wallet && (balance === null || balance === undefined)) {
-      walletApi.getMyWallet().then((w) => {
-        if (w && w.balance !== undefined && w.balance !== null) {
-          dispatch(setBalance(w.balance))
-        } else if (wallet.walletAddress) {
-          getUSDTBalance(wallet.walletAddress)
-            .then((bal) => dispatch(setBalance(bal)))
-            .catch((err) => console.error('Failed to fetch balance:', err))
-        }
-      }).catch((err) => console.error('Failed to fetch wallet:', err))
-    }
-  }, [isConnected, wallet, balance, dispatch])
+  }, [refreshBalance, location.pathname])
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -88,8 +75,8 @@ function Layout({ children }: LayoutProps) {
       if (userDropdownRef.current && !userDropdownRef.current.contains(event.target as Node)) {
         setUserDropdownOpen(false)
       }
-      if (walletDropdownRef.current && !walletDropdownRef.current.contains(event.target as Node)) {
-        setWalletDropdownOpen(false)
+      if (balanceDropdownRef.current && !balanceDropdownRef.current.contains(event.target as Node)) {
+        setBalanceDropdownOpen(false)
       }
     }
 
@@ -245,85 +232,47 @@ function Layout({ children }: LayoutProps) {
               <div className="flex items-center gap-4">
                 {isAuthenticated && user ? (
                   <>
-                    {/* Wallet Info */}
-                    <div className="hidden md:block relative" ref={walletDropdownRef}>
-                      {isConnected && wallet ? (
-                        <button
-                          onClick={() => setWalletDropdownOpen(!walletDropdownOpen)}
-                          className="flex items-center space-x-2 px-3 py-2 glass-card rounded-full hover:bg-white/15 transition-all"
-                        >
-                          <FontAwesomeIcon icon={faWallet} className="text-primary" />
-                          <div className="text-left hidden sm:block">
-                            <div className="text-xs text-slate-400">Wallet</div>
-                            <div className="text-sm font-medium text-white">
-                              {wallet.walletAddress.slice(0, 6)}...{wallet.walletAddress.slice(-4)}
-                            </div>
-                            {(balance !== null && balance !== undefined) ? (
-                              <div className="text-xs text-primary">
-                                {balance.toFixed(2)} USDT
-                              </div>
-                            ) : (
-                              <div className="text-xs text-slate-500">
-                                Loading...
-                              </div>
-                            )}
-                          </div>
-                          <FontAwesomeIcon
-                            icon={faChevronDown}
-                            className={`text-xs text-slate-400 transition-transform ${walletDropdownOpen ? 'rotate-180' : ''}`}
-                          />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={handleConnectWallet}
-                          disabled={isConnecting}
-                          className="flex items-center space-x-2 px-4 py-2 bg-primary text-primary-foreground rounded-full font-semibold hover:bg-primary/90 shadow-[0_0_30px_rgba(16,185,129,0.4)] hover:shadow-[0_0_50px_rgba(16,185,129,0.6)] hover:-translate-y-1 transition-all disabled:opacity-50 text-sm"
-                        >
-                          <FontAwesomeIcon icon={faWallet} />
-                          <span>
-                            {isConnecting ? 'Connecting...' : 'Connect Wallet'}
-                          </span>
-                        </button>
-                      )}
-                      {walletDropdownOpen && wallet && (
-                        <div className="absolute top-full right-0 mt-2 w-64 backdrop-blur-xl bg-[rgba(13,17,28,0.9)] border border-white/10 rounded-2xl shadow-2xl py-2 z-50">
-                          <div className="px-4 py-2 border-b border-white/5">
-                            <div className="text-xs text-slate-400 mb-1">Wallet Address</div>
-                            <div className="text-sm text-white font-mono break-all">
-                              {wallet.walletAddress}
-                            </div>
-                          </div>
-                          <div className="px-4 py-2 border-b border-white/5">
-                            <div className="text-xs text-slate-400 mb-1">Balance</div>
-                            <div className="text-lg font-semibold text-primary">
-                              {(balance !== null && balance !== undefined) ? `${balance.toFixed(2)} USDT` : 'Loading...'}
-                            </div>
-                          </div>
-                          <button
-                            onClick={handleRefreshBalance}
-                            className="w-full text-left px-4 py-2 text-slate-300 hover:bg-white/5 hover:text-primary transition-colors text-sm"
+                    {/* Balance Dropdown */}
+                    <div className="hidden md:block relative" ref={balanceDropdownRef}>
+                      <button
+                        onClick={() => setBalanceDropdownOpen(!balanceDropdownOpen)}
+                        className="flex items-center space-x-2 px-4 py-2 rounded-full bg-gradient-to-r from-primary/20 to-emerald-600/20 border border-primary/30 hover:border-primary/50 transition-all"
+                      >
+                        <FontAwesomeIcon icon={faWallet} className="text-primary" />
+                        <span className="text-sm font-semibold text-white">
+                          {balance ? `${Number(balance.amount).toFixed(2)} USDT` : '0.00 USDT'}
+                        </span>
+                        <FontAwesomeIcon
+                          icon={faChevronDown}
+                          className={`text-xs text-slate-400 transition-transform ${balanceDropdownOpen ? 'rotate-180' : ''}`}
+                        />
+                      </button>
+                      {balanceDropdownOpen && (
+                        <div className="absolute top-full right-0 mt-2 w-48 backdrop-blur-xl bg-[rgba(13,17,28,0.9)] border border-white/10 rounded-2xl shadow-2xl py-2 z-50">
+                          <Link
+                            to="/charge"
+                            onClick={() => setBalanceDropdownOpen(false)}
+                            className="block px-4 py-3 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
                           >
-                            Refresh Balance
-                          </button>
+                            Charge
+                          </Link>
+                          <Link
+                            to="/withdraw"
+                            onClick={() => setBalanceDropdownOpen(false)}
+                            className="block px-4 py-3 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+                          >
+                            Withdraw
+                          </Link>
                           <Link
                             to="/transactions"
-                            onClick={() => setWalletDropdownOpen(false)}
-                            className="block px-4 py-2 text-slate-300 hover:bg-white/5 hover:text-primary transition-colors text-sm"
+                            onClick={() => setBalanceDropdownOpen(false)}
+                            className="block px-4 py-3 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
                           >
-                            Transaction History
+                            Transactions
                           </Link>
-                          <a
-                            href={`https://tronscan.org/#/address/${wallet.walletAddress}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="block px-4 py-2 text-slate-300 hover:bg-white/5 hover:text-primary transition-colors text-sm"
-                          >
-                            View on TronScan
-                          </a>
                         </div>
                       )}
                     </div>
-                    
                     {/* User Menu */}
                     <div className="hidden md:block relative" ref={userDropdownRef}>
                       <button
@@ -425,6 +374,35 @@ function Layout({ children }: LayoutProps) {
               </Link>
               {isAuthenticated && (
                 <>
+                  <div className="px-4 py-2 border-b border-white/10">
+                    <div className="flex items-center space-x-2">
+                      <FontAwesomeIcon icon={faWallet} className="text-primary" />
+                      <span className="text-sm font-semibold text-white">
+                        {balance ? `${Number(balance.amount).toFixed(2)} USDT` : '0.00 USDT'}
+                      </span>
+                    </div>
+                  </div>
+                  <Link
+                    to="/charge"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block px-4 py-2 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+                  >
+                    Charge
+                  </Link>
+                  <Link
+                    to="/withdraw"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block px-4 py-2 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+                  >
+                    Withdraw
+                  </Link>
+                  <Link
+                    to="/transactions"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block px-4 py-2 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+                  >
+                    Transactions
+                  </Link>
                   <Link
                     to="/my-services"
                     onClick={() => setMobileMenuOpen(false)}
@@ -439,18 +417,6 @@ function Layout({ children }: LayoutProps) {
                   >
                     Profile
                   </Link>
-                  {!isConnected && (
-                    <button
-                      onClick={() => {
-                        handleConnectWallet()
-                        setMobileMenuOpen(false)
-                      }}
-                      disabled={isConnecting}
-                      className="w-full text-left px-4 py-2 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-50"
-                    >
-                      {isConnecting ? 'Connecting...' : 'Connect Wallet'}
-                    </button>
-                  )}
                   <button
                     onClick={() => {
                       setMobileMenuOpen(false)

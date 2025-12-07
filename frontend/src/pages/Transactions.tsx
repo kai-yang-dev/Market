@@ -1,205 +1,474 @@
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faArrowLeft, faExternalLinkAlt, faSpinner } from '@fortawesome/free-solid-svg-icons'
-import { useAppSelector } from '../store/hooks'
-import { walletApi, Transaction } from '../services/api'
+import { paymentApi, Transaction } from '../services/api'
 import { showToast } from '../utils/toast'
+import { useAppSelector } from '../store/hooks'
 
 function Transactions() {
   const navigate = useNavigate()
-  const { isAuthenticated } = useAppSelector((state) => state.auth)
+  const { user } = useAppSelector((state) => state.auth)
   const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [filterType, setFilterType] = useState<string>('all')
+  const [filterStatus, setFilterStatus] = useState<string>('all')
+  const limit = 10
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      navigate('/signin')
-      return
-    }
-    fetchTransactions()
-  }, [isAuthenticated, navigate])
+    loadTransactions()
+  }, [page])
 
-  const fetchTransactions = async () => {
+  const loadTransactions = async () => {
+    setLoading(true)
     try {
-      setLoading(true)
-      const data = await walletApi.getTransactions()
-      setTransactions(data)
+      const response = await paymentApi.getTransactions({ page, limit })
+      setTransactions(response.data)
+      setTotalPages(response.totalPages)
+      setTotal(response.total)
     } catch (error) {
-      console.error('Failed to fetch transactions:', error)
+      console.error('Failed to load transactions:', error)
       showToast.error('Failed to load transactions')
     } finally {
       setLoading(false)
     }
   }
 
-  const getTransactionTypeLabel = (type: string) => {
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'success':
+        return 'text-green-400 bg-green-400/10'
+      case 'pending':
+        return 'text-yellow-400 bg-yellow-400/10'
+      case 'failed':
+        return 'text-red-400 bg-red-400/10'
+      case 'cancelled':
+        return 'text-gray-400 bg-gray-400/10'
+      case 'draft':
+        return 'text-blue-400 bg-blue-400/10'
+      default:
+        return 'text-slate-400 bg-slate-400/10'
+    }
+  }
+
+  const getTypeLabel = (type: string) => {
     switch (type) {
-      case 'payment':
-        return 'Payment'
-      case 'release':
-        return 'Release'
-      case 'refund':
-        return 'Refund'
+      case 'charge':
+        return 'Charge'
       case 'withdraw':
         return 'Withdraw'
+      case 'milestone_payment':
+        return 'Milestone Payment'
       default:
         return type
     }
   }
 
-  const getTransactionTypeColor = (type: string) => {
-    switch (type) {
-      case 'payment':
-        return 'bg-blue-500/20 text-blue-400'
-      case 'release':
-        return 'bg-green-500/20 text-green-400'
-      case 'refund':
-        return 'bg-yellow-500/20 text-yellow-400'
-      case 'withdraw':
-        return 'bg-red-500/20 text-red-400'
-      default:
-        return 'bg-gray-500/20 text-gray-400'
+  const getTransactionRole = (transaction: Transaction): { role: string; otherParty?: string } => {
+    if (!user) return { role: 'User' }
+    
+    // For charge and withdraw, the user is the client (their own account)
+    if (transaction.type === 'charge' || transaction.type === 'withdraw') {
+      if (transaction.clientId === user.id) {
+        return { role: 'User' }
+      }
     }
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'bg-green-500/20 text-green-400'
-      case 'pending':
-        return 'bg-yellow-500/20 text-yellow-400'
-      case 'failed':
-        return 'bg-red-500/20 text-red-400'
-      default:
-        return 'bg-gray-500/20 text-gray-400'
+    
+    // For milestone payments
+    if (transaction.type === 'milestone_payment') {
+      if (transaction.clientId === user.id) {
+        return {
+          role: 'Client',
+          otherParty: transaction.provider
+            ? `${transaction.provider.firstName || ''} ${transaction.provider.lastName || ''}`.trim() || transaction.provider.userName || 'Provider'
+            : 'Provider',
+        }
+      } else if (transaction.providerId === user.id) {
+        return {
+          role: 'Provider',
+          otherParty: transaction.client
+            ? `${transaction.client.firstName || ''} ${transaction.client.lastName || ''}`.trim() || transaction.client.userName || 'Client'
+            : 'Client',
+        }
+      }
     }
-  }
-
-  const formatAddress = (address: string) => {
-    if (!address) return 'N/A'
-    return `${address.slice(0, 6)}...${address.slice(-4)}`
+    
+    return { role: 'User' }
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString()
+    const date = new Date(dateString)
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
   }
 
-  if (!isAuthenticated) {
-    return null
-  }
+  // Filter transactions
+  const filteredTransactions = transactions.filter((transaction) => {
+    const typeMatch = filterType === 'all' || transaction.type === filterType
+    const statusMatch = filterStatus === 'all' || transaction.status === filterStatus
+    return typeMatch && statusMatch
+  })
+
+  // Calculate summary
+  const summary = transactions.reduce(
+    (acc, transaction) => {
+      if (transaction.status === 'success') {
+        if (transaction.type === 'charge' || transaction.type === 'milestone_payment') {
+          acc.totalIn += Number(transaction.amount)
+        } else if (transaction.type === 'withdraw') {
+          acc.totalOut += Number(transaction.amount)
+        }
+      }
+      return acc
+    },
+    { totalIn: 0, totalOut: 0 }
+  )
 
   return (
-    <div className="min-h-screen bg-gray-900 py-8">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl">
-        <div className="mb-6">
-          <button
-            onClick={() => navigate(-1)}
-            className="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors mb-4"
-          >
-            <FontAwesomeIcon icon={faArrowLeft} />
-            <span>Back</span>
-          </button>
-          <h1 className="text-3xl font-bold text-white">Transaction History</h1>
-          <p className="text-gray-400 mt-2">View all your wallet transactions</p>
+    <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="backdrop-blur-xl bg-[rgba(13,17,28,0.9)] border border-white/10 rounded-2xl shadow-2xl p-6 md:p-8">
+        <h1 className="text-3xl font-bold text-white mb-2">Transaction History</h1>
+        <p className="text-slate-400 mb-6">View all your transactions</p>
+
+        {/* Summary Cards */}
+        {transactions.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div className="p-4 rounded-xl bg-gradient-to-r from-green-500/20 to-emerald-600/20 border border-green-500/30">
+              <p className="text-sm text-slate-400 mb-1">Total In</p>
+              <p className="text-2xl font-bold text-green-400">+{summary.totalIn.toFixed(2)} USDT</p>
+            </div>
+            <div className="p-4 rounded-xl bg-gradient-to-r from-red-500/20 to-orange-600/20 border border-red-500/30">
+              <p className="text-sm text-slate-400 mb-1">Total Out</p>
+              <p className="text-2xl font-bold text-red-400">-{summary.totalOut.toFixed(2)} USDT</p>
+            </div>
+          </div>
+        )}
+
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="flex-1">
+            <label htmlFor="filterType" className="block text-sm font-medium text-white mb-2">
+              Filter by Type
+            </label>
+            <select
+              id="filterType"
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="w-full px-4 py-2 rounded-xl bg-[rgba(2,4,8,0.7)] border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            >
+              <option value="all">All Types</option>
+              <option value="charge">Charge</option>
+              <option value="withdraw">Withdraw</option>
+              <option value="milestone_payment">Milestone Payment</option>
+            </select>
+          </div>
+          <div className="flex-1">
+            <label htmlFor="filterStatus" className="block text-sm font-medium text-white mb-2">
+              Filter by Status
+            </label>
+            <select
+              id="filterStatus"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="w-full px-4 py-2 rounded-xl bg-[rgba(2,4,8,0.7)] border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            >
+              <option value="all">All Statuses</option>
+              <option value="success">Success</option>
+              <option value="pending">Pending</option>
+              <option value="draft">Draft</option>
+              <option value="failed">Failed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
         </div>
 
         {loading ? (
-          <div className="flex justify-center items-center py-20">
-            <FontAwesomeIcon icon={faSpinner} className="text-4xl text-blue-500 animate-spin" />
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <p className="text-slate-400 mt-4">Loading transactions...</p>
           </div>
         ) : transactions.length === 0 ? (
-          <div className="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-12 text-center">
-            <p className="text-gray-400 text-lg">No transactions found</p>
+          <div className="text-center py-12">
+            <p className="text-slate-400">No transactions found</p>
+          </div>
+        ) : filteredTransactions.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-slate-400">No transactions match the selected filters</p>
+            <button
+              onClick={() => {
+                setFilterType('all')
+                setFilterStatus('all')
+              }}
+              className="mt-4 px-4 py-2 rounded-xl bg-primary text-white font-medium hover:bg-primary/90 transition-all"
+            >
+              Clear Filters
+            </button>
           </div>
         ) : (
-          <div className="bg-gray-800 rounded-xl shadow-lg border border-gray-700 overflow-hidden">
-            <div className="overflow-x-auto">
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-700">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Amount
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      From
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      To
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Transaction
-                    </th>
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="text-left py-4 px-4 text-sm font-semibold text-slate-400">Type</th>
+                    <th className="text-left py-4 px-4 text-sm font-semibold text-slate-400">Role</th>
+                    <th className="text-left py-4 px-4 text-sm font-semibold text-slate-400">Amount</th>
+                    <th className="text-left py-4 px-4 text-sm font-semibold text-slate-400">Status</th>
+                    <th className="text-left py-4 px-4 text-sm font-semibold text-slate-400">Date</th>
+                    <th className="text-left py-4 px-4 text-sm font-semibold text-slate-400">Description</th>
+                    <th className="text-left py-4 px-4 text-sm font-semibold text-slate-400">Hash/Address</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-700">
-                  {transactions.map((tx) => (
-                    <tr key={tx.id} className="hover:bg-gray-700/50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getTransactionTypeColor(
-                            tx.type,
-                          )}`}
-                        >
-                          {getTransactionTypeLabel(tx.type)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-white">
-                          {tx.amount.toFixed(2)} {tx.tokenType}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-300 font-mono">
-                          {formatAddress(tx.fromWalletAddress)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-300 font-mono">
-                          {formatAddress(tx.toWalletAddress)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
-                            tx.status,
-                          )}`}
-                        >
-                          {tx.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                        {formatDate(tx.createdAt)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {tx.txHash ? (
-                          <a
-                            href={`https://tronscan.org/#/transaction/${tx.txHash}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-400 hover:text-blue-300 transition-colors"
-                          >
-                            <FontAwesomeIcon icon={faExternalLinkAlt} />
-                          </a>
-                        ) : (
-                          <span className="text-gray-500">-</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                <tbody>
+                  {filteredTransactions.map((transaction) => {
+                    const { role, otherParty } = getTransactionRole(transaction)
+                    const isMilestonePayment = transaction.type === 'milestone_payment'
+                    const isClient = role === 'Client'
+                    const isProvider = role === 'Provider'
+                    
+                    // Determine if amount is positive (income) or negative (expense)
+                    let isPositive = false
+                    if (transaction.type === 'charge') {
+                      isPositive = true
+                    } else if (transaction.type === 'withdraw') {
+                      isPositive = false
+                    } else if (transaction.type === 'milestone_payment') {
+                      // If user is provider, they received payment (positive)
+                      // If user is client, they paid (negative)
+                      isPositive = isProvider
+                    }
+                    
+                    return (
+                      <tr key={transaction.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                        <td className="py-4 px-4">
+                          <span className="text-white font-medium">{getTypeLabel(transaction.type)}</span>
+                        </td>
+                        <td className="py-4 px-4">
+                          {isMilestonePayment ? (
+                            <div className="flex flex-col">
+                              <span className={`text-xs font-semibold ${isClient ? 'text-blue-400' : isProvider ? 'text-purple-400' : 'text-slate-400'}`}>
+                                {role}
+                              </span>
+                              {otherParty && (
+                                <span className="text-xs text-slate-500 mt-1">with {otherParty}</span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-500 text-sm">-</span>
+                          )}
+                        </td>
+                        <td className="py-4 px-4">
+                          <span className={`font-semibold ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                            {isPositive ? '+' : '-'}
+                            {Number(transaction.amount).toFixed(2)} USDT
+                          </span>
+                        </td>
+                        <td className="py-4 px-4">
+                          <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(transaction.status)}`}>
+                            {transaction.status.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="py-4 px-4">
+                          <span className="text-slate-400 text-sm">{formatDate(transaction.createdAt)}</span>
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-300 text-sm">{transaction.description || '-'}</span>
+                            {transaction.milestoneId && (
+                              <button
+                                onClick={() => {
+                                  // Navigate to chat with milestone - you might need to adjust this based on your routing
+                                  navigate(`/transactions?milestone=${transaction.milestoneId}`)
+                                }}
+                                className="text-primary hover:text-primary/80 text-xs underline"
+                              >
+                                View Milestone
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-4 px-4">
+                          {transaction.transactionHash ? (
+                            <a
+                              href={`https://tronscan.org/#/transaction/${transaction.transactionHash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:text-primary/80 text-sm font-mono truncate max-w-xs block"
+                              title={transaction.transactionHash}
+                            >
+                              {transaction.transactionHash.substring(0, 10)}...
+                            </a>
+                          ) : transaction.walletAddress ? (
+                            <span className="text-slate-400 text-sm font-mono truncate max-w-xs block" title={transaction.walletAddress}>
+                              {transaction.walletAddress.substring(0, 10)}...
+                            </span>
+                          ) : (
+                            <span className="text-slate-500 text-sm">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
-          </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-4">
+              {filteredTransactions.map((transaction) => {
+                const { role, otherParty } = getTransactionRole(transaction)
+                const isMilestonePayment = transaction.type === 'milestone_payment'
+                const isClient = role === 'Client'
+                const isProvider = role === 'Provider'
+                
+                // Determine if amount is positive (income) or negative (expense)
+                let isPositive = false
+                if (transaction.type === 'charge') {
+                  isPositive = true
+                } else if (transaction.type === 'withdraw') {
+                  isPositive = false
+                } else if (transaction.type === 'milestone_payment') {
+                  // If user is provider, they received payment (positive)
+                  // If user is client, they paid (negative)
+                  isPositive = isProvider
+                }
+                
+                return (
+                  <div
+                    key={transaction.id}
+                    className="p-4 rounded-xl bg-[rgba(2,4,8,0.7)] border border-white/10"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-white font-medium">{getTypeLabel(transaction.type)}</span>
+                          {isMilestonePayment && (
+                            <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                              isClient ? 'text-blue-400 bg-blue-400/10' : isProvider ? 'text-purple-400 bg-purple-400/10' : 'text-slate-400 bg-slate-400/10'
+                            }`}>
+                              {role}
+                            </span>
+                          )}
+                          <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${getStatusColor(transaction.status)}`}>
+                            {transaction.status.toUpperCase()}
+                          </span>
+                        </div>
+                        {isMilestonePayment && otherParty && (
+                          <div className="mt-1">
+                            <span className="text-xs text-slate-500">with {otherParty}</span>
+                          </div>
+                        )}
+                      </div>
+                      <span className={`font-semibold text-lg ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                        {isPositive ? '+' : '-'}
+                        {Number(transaction.amount).toFixed(2)} USDT
+                      </span>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div>
+                        <span className="text-slate-400">Date: </span>
+                        <span className="text-slate-300">{formatDate(transaction.createdAt)}</span>
+                      </div>
+                      {transaction.description && (
+                        <div>
+                          <span className="text-slate-400">Description: </span>
+                          <span className="text-slate-300">{transaction.description}</span>
+                        </div>
+                      )}
+                      {transaction.milestoneId && (
+                        <div>
+                          <button
+                            onClick={() => navigate(`/transactions?milestone=${transaction.milestoneId}`)}
+                            className="text-primary hover:text-primary/80 text-xs underline"
+                          >
+                            View Milestone
+                          </button>
+                        </div>
+                      )}
+                      {transaction.transactionHash && (
+                        <div>
+                          <span className="text-slate-400">Hash: </span>
+                          <a
+                            href={`https://tronscan.org/#/transaction/${transaction.transactionHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:text-primary/80 font-mono text-xs"
+                          >
+                            {transaction.transactionHash.substring(0, 20)}...
+                          </a>
+                        </div>
+                      )}
+                      {transaction.walletAddress && (
+                        <div>
+                          <span className="text-slate-400">Address: </span>
+                          <span className="text-slate-300 font-mono text-xs">{transaction.walletAddress.substring(0, 20)}...</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between mt-6 pt-6 border-t border-white/10 gap-4">
+                <div className="text-sm text-slate-400">
+                  Showing {(page - 1) * limit + 1} to {Math.min(page * limit, total)} of {total} transactions
+                </div>
+                <div className="flex gap-2 flex-wrap justify-center">
+                  <button
+                    onClick={() => setPage(page - 1)}
+                    disabled={page === 1}
+                    className="px-4 py-2 rounded-xl bg-[rgba(2,4,8,0.7)] border border-white/10 text-white font-medium hover:bg-white/5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <div className="flex items-center gap-2 flex-wrap justify-center">
+                    {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => {
+                      let pageNum
+                      if (totalPages <= 10) {
+                        pageNum = i + 1
+                      } else if (page <= 5) {
+                        pageNum = i + 1
+                      } else if (page >= totalPages - 4) {
+                        pageNum = totalPages - 9 + i
+                      } else {
+                        pageNum = page - 4 + i
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setPage(pageNum)}
+                          className={`px-4 py-2 rounded-xl font-medium transition-all ${
+                            page === pageNum
+                              ? 'bg-primary text-white'
+                              : 'bg-[rgba(2,4,8,0.7)] border border-white/10 text-slate-400 hover:bg-white/5'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <button
+                    onClick={() => setPage(page + 1)}
+                    disabled={page === totalPages}
+                    className="px-4 py-2 rounded-xl bg-[rgba(2,4,8,0.7)] border border-white/10 text-white font-medium hover:bg-white/5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
