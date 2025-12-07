@@ -1,363 +1,162 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Wallet } from '../entities/wallet.entity';
-import { Transaction, TransactionType, TransactionStatus } from '../entities/transaction.entity';
-import { TempWallet } from '../entities/temp-wallet.entity';
-import { PaymentService } from '../payment/payment.service';
+import { TempWallet, TempWalletStatus } from '../entities/temp-wallet.entity';
+import { encrypt, decrypt } from '../utils/encryption.util';
+
+// Use require for TronWeb as it's a CommonJS module
+const TronWebModule = require('tronweb');
+const TronWeb = TronWebModule.TronWeb || TronWebModule.default || TronWebModule;
 
 @Injectable()
 export class WalletService {
+  private tronWeb: any;
+  private readonly USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'; // USDT TRC20 contract address
+
   constructor(
-    @InjectRepository(Wallet)
-    private walletRepository: Repository<Wallet>,
-    @InjectRepository(Transaction)
-    private transactionRepository: Repository<Transaction>,
     @InjectRepository(TempWallet)
     private tempWalletRepository: Repository<TempWallet>,
-    private paymentService: PaymentService,
-  ) {}
+  ) {
+    // Initialize TronWeb
+    const fullNode = process.env.TRON_FULL_NODE || 'https://api.trongrid.io';
+    const solidityNode = process.env.TRON_SOLIDITY_NODE || 'https://api.trongrid.io';
+    const eventServer = process.env.TRON_EVENT_SERVER || 'https://api.trongrid.io';
 
-  /**
-   * Connect or update user wallet
-   */
-  async connectWallet(userId: string, walletAddress: string): Promise<Wallet> {
-    if (!this.paymentService.isValidAddress(walletAddress)) {
-      throw new BadRequestException('Invalid Tron wallet address');
-    }
-
-    let wallet = await this.walletRepository.findOne({
-      where: { userId, walletType: 'tron' },
-    });
-
-    if (wallet) {
-      wallet.walletAddress = walletAddress;
-      wallet.isConnected = true;
-      wallet.connectedAt = new Date();
-    } else {
-      wallet = this.walletRepository.create({
-        userId,
-        walletAddress,
-        walletType: 'tron',
-        isConnected: true,
-        connectedAt: new Date(),
-      });
-    }
-
-    return this.walletRepository.save(wallet);
-  }
-
-  /**
-   * Get user wallet
-   */
-  async getUserWallet(userId: string): Promise<Wallet | null> {
-    return this.walletRepository.findOne({
-      where: { userId, walletType: 'tron' },
-      relations: ['user'],
+    this.tronWeb = new TronWeb({
+      fullHost: fullNode,
+      solidityNode: solidityNode,
+      eventServer: eventServer,
     });
   }
 
-  /**
-   * Get wallet balance
-   */
-  async getWalletBalance(walletAddress: string): Promise<number> {
-    return this.paymentService.getUSDTBalance(walletAddress);
-  }
-
-  /**
-   * Create a temp wallet for a milestone
-   */
-  async createTempWallet(milestoneId: string): Promise<TempWallet> {
-    // Check if temp wallet already exists
-    const existing = await this.tempWalletRepository.findOne({
-      where: { milestoneId },
+  async getOrCreateTempWallet(userId: string): Promise<TempWallet> {
+    // Check if user has an active temp wallet
+    const existingWallet = await this.tempWalletRepository.findOne({
+      where: { userId, status: TempWalletStatus.ACTIVE },
     });
 
-    if (existing) {
-      return existing;
+    if (existingWallet) {
+      return existingWallet;
     }
 
-    const { address, privateKey } = await this.paymentService.generateWallet();
+    // Generate new wallet
+    const account = this.tronWeb.utils.accounts.generateAccount();
+    const address = account.address.base58;
+    const privateKey = account.privateKey;
+
+    // Encrypt private key before storing
+    const encryptedPrivateKey = encrypt(privateKey);
 
     const tempWallet = this.tempWalletRepository.create({
-      milestoneId,
-      walletAddress: address,
-      privateKey,
-      isActive: true,
+      userId,
+      address,
+      privateKey: encryptedPrivateKey,
+      status: TempWalletStatus.ACTIVE,
+      totalReceived: 0,
     });
 
-    return this.tempWalletRepository.save(tempWallet);
+    return await this.tempWalletRepository.save(tempWallet);
   }
 
-  /**
-   * Get temp wallet for a milestone
-   */
-  async getTempWallet(milestoneId: string): Promise<TempWallet | null> {
-    return this.tempWalletRepository.findOne({
-      where: { milestoneId },
+  async getTempWallet(userId: string): Promise<TempWallet | null> {
+    return await this.tempWalletRepository.findOne({
+      where: { userId, status: TempWalletStatus.ACTIVE },
     });
   }
 
-  /**
-   * Process payment from client to temp wallet
-   */
-  async processMilestonePayment(
-    milestoneId: string,
-    clientWalletAddress: string,
+  async getDecryptedPrivateKey(tempWallet: TempWallet): Promise<string> {
+    return decrypt(tempWallet.privateKey);
+  }
+
+  async checkWalletPayment(
+    walletAddress: string,
+    expectedAmount: number,
+    tolerance: number = 0.01,
+  ): Promise<{ success: boolean; transactionHash?: string; amount?: number }> {
+    try {
+      // Get TRC20 token transactions using TronGrid API
+      const tronGridUrl = process.env.TRON_GRID_URL || 'https://api.trongrid.io';
+      const response = await fetch(
+        `${tronGridUrl}/v1/accounts/${walletAddress}/transactions/trc20?only_confirmed=true&limit=50&contract_address=${this.USDT_CONTRACT}`,
+      );
+
+      if (!response.ok) {
+        console.error('Failed to fetch transactions from TronGrid');
+        return { success: false };
+      }
+
+      const data = await response.json();
+      const transactions = data.data || [];
+
+      // Check for matching transactions
+      for (const tx of transactions) {
+        if (tx.type === 'Transfer' && tx.to === walletAddress) {
+          const amount = Number(tx.value) / 1e6; // USDT has 6 decimals
+
+          // Check if amount matches expected (within tolerance)
+          if (Math.abs(amount - expectedAmount) <= tolerance) {
+            return {
+              success: true,
+              transactionHash: tx.transaction_id,
+              amount: amount,
+            };
+          }
+        }
+      }
+
+      return { success: false };
+    } catch (error) {
+      console.error('Error checking wallet payment:', error);
+      return { success: false };
+    }
+  }
+
+  async sendUSDT(
+    fromPrivateKey: string,
+    toAddress: string,
     amount: number,
-    clientId?: string,
-  ): Promise<Transaction> {
-    // Create or get temp wallet
-    const tempWallet = await this.createTempWallet(milestoneId);
-
-    // Get wallet to find user ID
-    let fromUserId = clientId;
-    if (!fromUserId) {
-      const wallet = await this.walletRepository.findOne({
-        where: { walletAddress: clientWalletAddress },
-      });
-      fromUserId = wallet?.userId;
-    }
-
-    // Create transaction record
-    const transaction = this.transactionRepository.create({
-      milestoneId,
-      fromUserId,
-      fromWalletAddress: clientWalletAddress,
-      toWalletAddress: tempWallet.walletAddress,
-      tempWalletAddress: tempWallet.walletAddress,
-      amount,
-      tokenType: 'USDT',
-      tokenStandard: 'TRC20',
-      type: TransactionType.PAYMENT,
-      status: TransactionStatus.PENDING,
-    });
-
-    const savedTransaction = await this.transactionRepository.save(transaction);
-
-    // Note: The actual transfer should be initiated from the frontend
-    // This is just a record. The frontend will call the wallet to transfer
-    // and then update this transaction with the txHash
-
-    return savedTransaction;
-  }
-
-  /**
-   * Update transaction with txHash after payment
-   */
-  async updateTransactionWithHash(
-    transactionId: string,
-    txHash: string,
-  ): Promise<Transaction> {
-    const transaction = await this.transactionRepository.findOne({
-      where: { id: transactionId },
-    });
-
-    if (!transaction) {
-      throw new NotFoundException('Transaction not found');
-    }
-
-    transaction.txHash = txHash;
-    transaction.status = TransactionStatus.PENDING; // Will be verified later
-
-    // Verify transaction
-    const verification = await this.paymentService.verifyTransaction(txHash);
-    if (verification.confirmed) {
-      transaction.status = verification.success
-        ? TransactionStatus.COMPLETED
-        : TransactionStatus.FAILED;
-      transaction.blockNumber = verification.blockNumber;
-    }
-
-    return this.transactionRepository.save(transaction);
-  }
-
-  /**
-   * Release payment from temp wallet to provider
-   */
-  async releasePaymentToProvider(
-    milestoneId: string,
-    providerWalletAddress: string,
-    providerId?: string,
-  ): Promise<Transaction> {
-    const tempWallet = await this.getTempWallet(milestoneId);
-    if (!tempWallet) {
-      throw new NotFoundException('Temp wallet not found for this milestone');
-    }
-
-    // Get the original payment transaction
-    const paymentTx = await this.transactionRepository.findOne({
-      where: {
-        milestoneId,
-        type: TransactionType.PAYMENT,
-        status: TransactionStatus.COMPLETED,
-      },
-      order: { createdAt: 'DESC' },
-    });
-
-    if (!paymentTx) {
-      throw new NotFoundException('Payment transaction not found');
-    }
-
-    const amount = paymentTx.amount;
-
-    // Get wallet to find user ID
-    let toUserId = providerId;
-    if (!toUserId) {
-      const wallet = await this.walletRepository.findOne({
-        where: { walletAddress: providerWalletAddress },
-      });
-      toUserId = wallet?.userId;
-    }
-
-    // Create release transaction record
-    const transaction = this.transactionRepository.create({
-      milestoneId,
-      toUserId,
-      fromWalletAddress: tempWallet.walletAddress,
-      toWalletAddress: providerWalletAddress,
-      tempWalletAddress: tempWallet.walletAddress,
-      amount,
-      tokenType: 'USDT',
-      tokenStandard: 'TRC20',
-      type: TransactionType.RELEASE,
-      status: TransactionStatus.PENDING,
-    });
-
-    const savedTransaction = await this.transactionRepository.save(transaction);
-
-    // Transfer from temp wallet to provider
+  ): Promise<string> {
     try {
-      const txHash = await this.paymentService.transferUSDT(
-        tempWallet.privateKey,
-        providerWalletAddress,
-        amount,
-      );
+      // Set private key
+      this.tronWeb.setPrivateKey(fromPrivateKey);
 
-      savedTransaction.txHash = txHash;
-      savedTransaction.status = TransactionStatus.PENDING;
+      // Get contract instance
+      const contract = await this.tronWeb.contract().at(this.USDT_CONTRACT);
 
-      // Verify transaction
-      const verification = await this.paymentService.verifyTransaction(txHash);
-      if (verification.confirmed) {
-        savedTransaction.status = verification.success
-          ? TransactionStatus.COMPLETED
-          : TransactionStatus.FAILED;
-        savedTransaction.blockNumber = verification.blockNumber;
-      }
+      // Convert amount to smallest unit (USDT has 6 decimals)
+      const amountInSmallestUnit = Math.floor(amount * 1e6);
 
-      return this.transactionRepository.save(savedTransaction);
+      // Send transaction
+      const transaction = await contract.transfer(toAddress, amountInSmallestUnit).send();
+
+      return transaction;
     } catch (error) {
-      savedTransaction.status = TransactionStatus.FAILED;
-      savedTransaction.error = error.message;
-      return this.transactionRepository.save(savedTransaction);
+      console.error('Error sending USDT:', error);
+      throw new BadRequestException(`Failed to send USDT: ${error.message}`);
     }
   }
 
-  /**
-   * Refund payment from temp wallet to client
-   */
-  async refundPaymentToClient(
-    milestoneId: string,
-    clientWalletAddress: string,
-    clientId?: string,
-  ): Promise<Transaction> {
-    const tempWallet = await this.getTempWallet(milestoneId);
-    if (!tempWallet) {
-      throw new NotFoundException('Temp wallet not found for this milestone');
-    }
+  async estimateGasFee(): Promise<number> {
+    // TRX price in USDT (you can fetch this from an API or use a fixed rate)
+    // For now, using a conservative estimate
+    const trxPriceInUSDT = 0.1; // This should be fetched from an API
+    const estimatedTRX = 15; // Conservative estimate for USDT transfer
+    return estimatedTRX * trxPriceInUSDT;
+  }
 
-    // Get the original payment transaction
-    const paymentTx = await this.transactionRepository.findOne({
-      where: {
-        milestoneId,
-        type: TransactionType.PAYMENT,
-        status: TransactionStatus.COMPLETED,
-      },
-      order: { createdAt: 'DESC' },
-    });
-
-    if (!paymentTx) {
-      throw new NotFoundException('Payment transaction not found');
-    }
-
-    const amount = paymentTx.amount;
-
-    // Get wallet to find user ID
-    let toUserId = clientId;
-    if (!toUserId) {
-      const wallet = await this.walletRepository.findOne({
-        where: { walletAddress: clientWalletAddress },
-      });
-      toUserId = wallet?.userId;
-    }
-
-    // Create refund transaction record
-    const transaction = this.transactionRepository.create({
-      milestoneId,
-      toUserId,
-      fromWalletAddress: tempWallet.walletAddress,
-      toWalletAddress: clientWalletAddress,
-      tempWalletAddress: tempWallet.walletAddress,
-      amount,
-      tokenType: 'USDT',
-      tokenStandard: 'TRC20',
-      type: TransactionType.REFUND,
-      status: TransactionStatus.PENDING,
-    });
-
-    const savedTransaction = await this.transactionRepository.save(transaction);
-
-    // Transfer from temp wallet to client
+  async getTRXBalance(walletAddress: string): Promise<number> {
     try {
-      const txHash = await this.paymentService.transferUSDT(
-        tempWallet.privateKey,
-        clientWalletAddress,
-        amount,
-      );
-
-      savedTransaction.txHash = txHash;
-      savedTransaction.status = TransactionStatus.PENDING;
-
-      // Verify transaction
-      const verification = await this.paymentService.verifyTransaction(txHash);
-      if (verification.confirmed) {
-        savedTransaction.status = verification.success
-          ? TransactionStatus.COMPLETED
-          : TransactionStatus.FAILED;
-        savedTransaction.blockNumber = verification.blockNumber;
-      }
-
-      return this.transactionRepository.save(savedTransaction);
+      const balance = await this.tronWeb.trx.getBalance(walletAddress);
+      return balance / 1e6; // Convert from sun to TRX
     } catch (error) {
-      savedTransaction.status = TransactionStatus.FAILED;
-      savedTransaction.error = error.message;
-      return this.transactionRepository.save(savedTransaction);
+      console.error('Error getting TRX balance:', error);
+      return 0;
     }
   }
 
-  /**
-   * Get user transactions
-   */
-  async getUserTransactions(userId: string): Promise<Transaction[]> {
-    return this.transactionRepository.find({
-      where: [
-        { fromUserId: userId },
-        { toUserId: userId },
-      ],
-      relations: ['milestone', 'fromUser', 'toUser'],
-      order: { createdAt: 'DESC' },
-    });
-  }
-
-  /**
-   * Get milestone transactions
-   */
-  async getMilestoneTransactions(milestoneId: string): Promise<Transaction[]> {
-    return this.transactionRepository.find({
-      where: { milestoneId },
-      relations: ['fromUser', 'toUser'],
-      order: { createdAt: 'ASC' },
+  async updateWalletLastChecked(walletId: string): Promise<void> {
+    await this.tempWalletRepository.update(walletId, {
+      lastCheckedAt: new Date(),
     });
   }
 }

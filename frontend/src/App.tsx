@@ -10,6 +10,8 @@ import ServiceDetail from './pages/ServiceDetail'
 import Chat from './pages/Chat'
 import Feed from './pages/Feed'
 import Profile from './pages/Profile'
+import Charge from './pages/Charge'
+import Withdraw from './pages/Withdraw'
 import Transactions from './pages/Transactions'
 import Layout from './components/Layout'
 
@@ -33,6 +35,8 @@ function App() {
                 <Route path="/services/:id" element={<ServiceDetail />} />
                 <Route path="/chat/:id" element={<Chat />} />
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/charge" element={<Charge />} />
+                <Route path="/withdraw" element={<Withdraw />} />
                 <Route path="/transactions" element={<Transactions />} />
               </Routes>
             </Layout>

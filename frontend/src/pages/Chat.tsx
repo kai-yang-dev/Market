@@ -18,11 +18,10 @@ import {
   faSmile,
   faPaperclip,
 } from '@fortawesome/free-solid-svg-icons'
-import { conversationApi, messageApi, milestoneApi, walletApi, Conversation, Message, Milestone } from '../services/api'
+import { conversationApi, messageApi, milestoneApi, paymentApi, Conversation, Message, Milestone, Transaction } from '../services/api'
 import { useAppSelector } from '../store/hooks'
 import { getSocket } from '../services/socket'
 import { Socket } from 'socket.io-client'
-import { transferUSDT } from '../utils/tronWeb'
 import { showToast } from '../utils/toast'
 
 function Chat() {
@@ -32,6 +31,9 @@ function Chat() {
   const [conversation, setConversation] = useState<Conversation | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [milestones, setMilestones] = useState<Milestone[]>([])
+  const [pendingPayments, setPendingPayments] = useState<Map<string, Transaction>>(new Map())
+  const [successfulPayments, setSuccessfulPayments] = useState<Map<string, Transaction>>(new Map())
+  const [acceptingPayment, setAcceptingPayment] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [messageText, setMessageText] = useState('')
@@ -100,6 +102,37 @@ function Chat() {
       fetchMilestones()
     }
 
+    // Listen for payment accepted events
+    const handlePaymentAccepted = (data: { transaction: Transaction; milestoneId: string; conversationId: string }) => {
+      if (data.conversationId === id) {
+        // Remove from pending payments
+        setPendingPayments((prev) => {
+          const newMap = new Map(prev)
+          newMap.delete(data.milestoneId)
+          return newMap
+        })
+        
+        // Add to successful payments
+        setSuccessfulPayments((prev) => {
+          const newMap = new Map(prev)
+          newMap.set(data.milestoneId, data.transaction)
+          return newMap
+        })
+        
+        // Refresh milestones and messages
+        fetchMilestones()
+        fetchMessages()
+        
+        // Scroll to show the success card
+        setTimeout(() => {
+          scrollToBottom()
+        }, 300)
+        
+        // Notify Layout to refresh balance
+        window.dispatchEvent(new CustomEvent('balance-updated'))
+      }
+    }
+
     // Listen for typing indicators
     const handleTyping = (data: { userId: string; userName: string }) => {
       if (data.userId !== user?.id) {
@@ -124,9 +157,9 @@ function Chat() {
     }
 
     // Listen for read receipts
-    const handleMessagesRead = (data: { 
-      conversationId: string; 
-      readBy: string; 
+    const handleMessagesRead = (data: {
+      conversationId: string;
+      readBy: string;
       messages?: Message[];
       messageIds?: string[];
     }) => {
@@ -135,10 +168,10 @@ function Chat() {
         setMessages((prev) =>
           prev.map((msg) => {
             // If this message was read (it's in the messageIds array or in the messages array)
-            const wasRead = 
+            const wasRead =
               (data.messageIds && data.messageIds.includes(msg.id)) ||
               (data.messages && data.messages.some((m) => m.id === msg.id));
-            
+
             // Only update if the current user sent this message and it was just read
             if (wasRead && msg.senderId === user?.id && !msg.readAt) {
               // Use the readAt from the updated message if available, otherwise use current time
@@ -156,6 +189,7 @@ function Chat() {
 
     socket.on('new_message', handleNewMessage)
     socket.on('milestone_updated', handleMilestoneUpdate)
+    socket.on('payment_accepted', handlePaymentAccepted)
     socket.on('user_typing', handleTyping)
     socket.on('user_stopped_typing', handleStopTyping)
     socket.on('messages_read', handleMessagesRead)
@@ -173,6 +207,7 @@ function Chat() {
       if (socket) {
         socket.off('new_message', handleNewMessage)
         socket.off('milestone_updated', handleMilestoneUpdate)
+        socket.off('payment_accepted', handlePaymentAccepted)
         socket.off('user_typing', handleTyping)
         socket.off('user_stopped_typing', handleStopTyping)
         socket.off('messages_read', handleMessagesRead)
@@ -194,7 +229,7 @@ function Chat() {
     scrollToBottom()
     // Mark messages as read when new messages arrive or when viewing
     markMessagesAsRead()
-  }, [messages, milestones])
+  }, [messages, milestones, pendingPayments, successfulPayments])
 
   // Mark messages as read when user is actively viewing (scroll or focus)
   useEffect(() => {
@@ -339,9 +374,36 @@ function Chat() {
   }
 
   const fetchMilestones = async () => {
+    if (!id || !user) return
     try {
       const data = await milestoneApi.getByConversation(id!)
       setMilestones(data)
+      
+      // Fetch pending and successful payments for each milestone (for both clients and providers)
+      const pendingPaymentsMap = new Map<string, Transaction>()
+      const successfulPaymentsMap = new Map<string, Transaction>()
+      
+      for (const milestone of data) {
+        if (milestone.status === 'completed' || milestone.status === 'released') {
+          try {
+            // Check for pending payment
+            const pendingPayment = await paymentApi.getPendingPaymentByMilestone(milestone.id)
+            if (pendingPayment) {
+              pendingPaymentsMap.set(milestone.id, pendingPayment)
+            }
+            
+            // Check for successful payment
+            const successfulPayment = await paymentApi.getSuccessfulPaymentByMilestone(milestone.id)
+            if (successfulPayment) {
+              successfulPaymentsMap.set(milestone.id, successfulPayment)
+            }
+          } catch (error) {
+            // No payment for this milestone
+          }
+        }
+      }
+      setPendingPayments(pendingPaymentsMap)
+      setSuccessfulPayments(successfulPaymentsMap)
     } catch (error) {
       console.error('Failed to fetch milestones:', error)
       showToast.error('Failed to load milestones')
@@ -353,7 +415,7 @@ function Chat() {
 
     try {
       setSending(true)
-      
+
       // Try WebSocket first, fallback to HTTP API
       if (socketRef.current && socketRef.current.connected) {
         socketRef.current.emit('send_message', {
@@ -383,48 +445,30 @@ function Chat() {
     if (!conversation || !milestoneForm.title || !milestoneForm.description || !milestoneForm.balance) return
 
     try {
-      // Check if wallet is connected
-      const wallet = await walletApi.getMyWallet()
-      if (!wallet || !wallet.walletAddress) {
-        showToast.error('Please connect your wallet before creating a milestone')
-        return
-      }
-
       const amount = parseFloat(milestoneForm.balance)
-      
-      // Create milestone (this will create temp wallet and payment transaction)
-      const milestone = await milestoneApi.create(id!, {
+
+      // Create milestone
+      await milestoneApi.create(id!, {
         serviceId: conversation.serviceId,
         title: milestoneForm.title,
         description: milestoneForm.description,
         balance: amount,
       })
 
-      // Get the payment transaction
-      const transactions = await walletApi.getMilestoneTransactions(milestone.id)
-      const paymentTransaction = transactions.find(tx => tx.type === 'payment' && tx.status === 'pending')
-      
-      if (!paymentTransaction) {
-        throw new Error('Payment transaction not found')
-      }
+      showToast.success('Milestone created successfully!')
 
-      // Transfer USDT from user wallet to temp wallet
-      showToast.info('Please confirm the transaction in your wallet...')
-      const txHash = await transferUSDT(paymentTransaction.toWalletAddress, amount)
-      
-      // Update transaction with hash
-      await walletApi.updateTransactionHash(paymentTransaction.id, txHash)
-      
-      showToast.success('Milestone created and payment processed successfully!')
-      
       setMilestoneForm({ title: '', description: '', balance: '' })
       setShowMilestoneForm(false)
       await fetchMilestones()
       await fetchMessages()
+      
       // Emit milestone update via WebSocket
       if (socketRef.current) {
         socketRef.current.emit('milestone_updated', { conversationId: id })
       }
+      
+      // Notify Layout to refresh balance (client's balance decreased)
+      window.dispatchEvent(new CustomEvent('balance-updated'))
     } catch (error: any) {
       console.error('Failed to create milestone:', error)
       showToast.error(error.message || 'Failed to create milestone. Please try again.')
@@ -434,6 +478,14 @@ function Chat() {
   const handleMilestoneAction = async (milestoneId: string, action: string) => {
     try {
       setUpdatingMilestone(milestoneId)
+      
+      // Check if milestone is already released and trying to release again
+      const milestone = milestones.find(m => m.id === milestoneId)
+      if (action === 'release' && milestone?.status === 'released') {
+        showToast.error('This milestone has already been released')
+        return
+      }
+      
       switch (action) {
         case 'accept':
           await milestoneApi.accept(milestoneId)
@@ -449,6 +501,9 @@ function Chat() {
           break
         case 'release':
           await milestoneApi.release(milestoneId)
+          showToast.success('Milestone released! Provider can now accept the payment.')
+          // Refresh milestones to get pending payment
+          await fetchMilestones()
           break
         case 'dispute':
           await milestoneApi.dispute(milestoneId)
@@ -460,11 +515,47 @@ function Chat() {
       if (socketRef.current) {
         socketRef.current.emit('milestone_updated', { conversationId: id })
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Failed to ${action} milestone:`, error)
-      alert(`Failed to ${action} milestone. Please try again.`)
+      const errorMessage = error.response?.data?.message || error.message || `Failed to ${action} milestone. Please try again.`
+      showToast.error(errorMessage)
     } finally {
       setUpdatingMilestone(null)
+    }
+  }
+
+  const handleAcceptPayment = async (transactionId: string, milestoneId: string) => {
+    try {
+      setAcceptingPayment(transactionId)
+      const acceptedTransaction = await paymentApi.acceptPayment(transactionId)
+      showToast.success('Payment accepted successfully!')
+      
+      // Remove from pending payments
+      const newPendingPayments = new Map(pendingPayments)
+      newPendingPayments.delete(milestoneId)
+      setPendingPayments(newPendingPayments)
+      
+      // Add to successful payments
+      const newSuccessfulPayments = new Map(successfulPayments)
+      newSuccessfulPayments.set(milestoneId, acceptedTransaction)
+      setSuccessfulPayments(newSuccessfulPayments)
+      
+      // Refresh milestones and messages
+      await fetchMilestones()
+      await fetchMessages()
+      
+      // Notify Layout to refresh balance (provider's balance increased)
+      window.dispatchEvent(new CustomEvent('balance-updated'))
+      
+      // Scroll to show the success card
+      setTimeout(() => {
+        scrollToBottom()
+      }, 300)
+    } catch (error: any) {
+      console.error('Failed to accept payment:', error)
+      showToast.error(error.response?.data?.message || 'Failed to accept payment')
+    } finally {
+      setAcceptingPayment(null)
     }
   }
 
@@ -527,7 +618,7 @@ function Chat() {
     const messageDate = new Date(date)
     const diff = now.getTime() - messageDate.getTime()
     const diffDays = Math.floor(diff / (1000 * 60 * 60 * 24))
-    
+
     if (diffDays === 0) {
       return messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     } else if (diffDays === 1) {
@@ -578,418 +669,630 @@ function Chat() {
   const isClient = conversation.clientId === user?.id
 
   return (
-    <div className="mx-auto fixed inset-0 flex flex-col pt-16">
-      <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col min-w-0 min-h-0">
-          {/* Header */}
-          <div className="glass-card border-b border-white/10 px-4 py-3 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center space-x-3 flex-1 min-w-0">
-            <button
-              onClick={() => navigate('/services')}
-              className="text-slate-400 hover:text-primary transition-colors p-2 -ml-2"
-            >
-              <FontAwesomeIcon icon={faArrowLeft} />
-            </button>
-            <div className="w-10 h-10 bg-gradient-to-br from-primary to-emerald-600 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0">
-              {otherUser?.firstName?.[0] || otherUser?.userName?.[0] || <FontAwesomeIcon icon={faUser} />}
-            </div>
-            <div className="flex-1 min-w-0">
-              <h2 className="text-base font-semibold text-white truncate">
-                {otherUser?.firstName && otherUser?.lastName
-                  ? `${otherUser.firstName} ${otherUser.lastName}`
-                  : otherUser?.userName || 'User'}
-              </h2>
-              <div className="flex items-center gap-2">
-                <p className="text-xs text-slate-400 truncate">{conversation.service?.title}</p>
-                {typingUsers.size > 0 && (
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <div className="flex gap-0.5">
-                      <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                      <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                      <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                    </div>
-                    <span className="text-xs text-primary italic">
-                      {Array.from(typingUsers).length === 1 ? 'typing...' : 'typing...'}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-          <button className="text-slate-400 hover:text-primary transition-colors p-2">
-            <FontAwesomeIcon icon={faEllipsisV} />
-          </button>
-        </div>
-
-          {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto relative min-h-0">
-          <div className="relative p-4 space-y-1">
-            {(() => {
-              // Combine messages and milestones, sorted by creation time
-              const allItems = [
-                ...messages.map((m) => ({ type: 'message' as const, data: m, createdAt: m.createdAt })),
-                ...milestones.map((mil) => ({ type: 'milestone' as const, data: mil, createdAt: mil.createdAt })),
-              ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-
-              let previousDate: Date | undefined
-
-              return allItems.map((item) => {
-                const itemDate = new Date(item.createdAt)
-                const showDateSeparator = shouldShowDate(itemDate, previousDate)
-                previousDate = itemDate
-
-                if (item.type === 'message') {
-                  const message = item.data as Message
-                  const isOwn = message.senderId === user?.id
-                  const sender = message.sender
-                  
-                  return (
-                    <div key={`msg-${message.id}`}>
-                      {showDateSeparator && (
-                        <div className="flex justify-center my-4">
-                          <div className="glass-card text-slate-400 text-xs px-3 py-1 rounded-full">
-                            {itemDate.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                          </div>
-                        </div>
-                      )}
-                      <div className={`flex items-end gap-2 mb-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-                        {/* Avatar for incoming messages */}
-                        {!isOwn && (
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-emerald-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 mb-1">
-                            {sender?.firstName?.[0] || sender?.userName?.[0] || <FontAwesomeIcon icon={faUser} className="text-xs" />}
-                          </div>
-                        )}
-                        
-                        <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'} max-w-[65%] ${isOwn ? 'mr-0' : 'ml-0'}`}>
-                          {/* Sender name for incoming messages */}
-                          {!isOwn && sender && (
-                            <span className="text-slate-400 text-xs px-2 mb-0.5">
-                              {sender.firstName && sender.lastName
-                                ? `${sender.firstName} ${sender.lastName}`
-                                : sender.userName || 'User'}
-                            </span>
-                          )}
-                          
-                          {/* Message bubble */}
-                          <div
-                            className={`relative px-3 py-2 rounded-2xl ${
-                              isOwn
-                                ? 'bg-primary text-primary-foreground rounded-tr-sm'
-                                : 'glass-card text-white rounded-tl-sm'
-                            } shadow-sm`}
-                          >
-                            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message.message}</p>
-                            
-                            {/* Timestamp and Read Status */}
-                            <div className={`flex items-center gap-1 mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                              <span className={`text-[10px] ${isOwn ? 'text-primary-foreground/70' : 'text-slate-400'}`}>
-                                {formatTime(new Date(message.createdAt))}
-                              </span>
-                              {isOwn && (
-                                <FontAwesomeIcon
-                                  icon={message.readAt ? faCheckDouble : faCheck}
-                                  className={`text-[10px] ${message.readAt ? 'text-primary-foreground' : 'text-primary-foreground/50'}`}
-                                />
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                } else {
-                  const milestone = item.data as Milestone
-                  const isOwn = milestone.clientId === user?.id
-                  
-                  return (
-                    <div key={`mil-${milestone.id}`}>
-                      {showDateSeparator && (
-                        <div className="flex justify-center my-4">
-                          <div className="bg-[#182533] text-[#708499] text-xs px-3 py-1 rounded-full">
-                            {itemDate.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                          </div>
-                        </div>
-                      )}
-                      <div className={`flex items-end gap-2 mb-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-                        <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'} max-w-[65%]`}>
-                          <div
-                            className={`relative px-4 py-3 rounded-2xl ${
-                              isOwn
-                                ? 'bg-primary/20 border border-primary/30 text-white rounded-tr-sm'
-                                : 'glass-card text-white rounded-tl-sm'
-                            } shadow-lg`}
-                          >
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">Milestone</span>
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${getStatusColor(milestone.status)}`}>
-                                {milestone.status}
-                              </span>
-                            </div>
-                            <h4 className="font-semibold mb-1.5 text-base">{milestone.title}</h4>
-                            <p className="text-sm mb-3 opacity-90 leading-relaxed">{milestone.description}</p>
-                            <div className="flex items-center justify-between pt-2 border-t border-white/10">
-                              <span className="text-lg font-bold text-primary">${Number(milestone.balance).toFixed(2)}</span>
-                              <span className={`text-[10px] ${isOwn ? 'text-primary' : 'text-slate-400'}`}>
-                                {formatTime(new Date(milestone.createdAt))}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                }
-              })
-            })()}
-            <div ref={messagesEndRef} />
-          </div>
-        </div>
-
-          {/* Input Area */}
-          <div className="glass-card border-t border-white/10 px-4 py-3 flex-shrink-0">
-          <div className="flex items-end gap-2">
-            <button className="text-slate-400 hover:text-primary transition-colors p-2 flex-shrink-0">
-              <FontAwesomeIcon icon={faPaperclip} />
-            </button>
-            <div className="flex-1 relative">
-              <textarea
-                ref={textareaRef}
-                value={messageText}
-                onChange={(e) => {
-                  setMessageText(e.target.value)
-                  handleTyping()
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    handleSendMessage()
-                  } else {
-                    handleTyping()
-                  }
-                }}
-                placeholder="Type a message..."
-                rows={1}
-                className="w-full glass-card text-white rounded-2xl px-4 py-2.5 pr-12 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 resize-none max-h-32 overflow-y-auto placeholder-slate-400 text-sm leading-5"
-                style={{ minHeight: '42px', maxHeight: '128px' }}
-              />
-              <div className="relative">
+    <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto inset-0 flex flex-col">
+        <div className="flex-1 flex min-h-0 overflow-hidden">
+          {/* Main Chat Area */}
+          <div className="flex-1 flex flex-col min-w-0 min-h-0">
+            {/* Header */}
+            <div className="glass-card border-b border-white/10 px-4 py-3 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center space-x-3 flex-1 min-w-0">
                 <button
-                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                  className="text-slate-400 hover:text-primary transition-colors p-2 absolute right-1 bottom-1"
+                  onClick={() => navigate('/services')}
+                  className="text-slate-400 hover:text-primary transition-colors p-2 -ml-2"
                 >
-                  <FontAwesomeIcon icon={faSmile} />
+                  <FontAwesomeIcon icon={faArrowLeft} />
                 </button>
-                {showEmojiPicker && (
-                  <div
-                    ref={emojiPickerRef}
-                    className="absolute bottom-12 right-0 glass-card rounded-2xl shadow-2xl p-3 w-64 h-64 overflow-y-auto z-50"
-                  >
-                    <div className="grid grid-cols-8 gap-1">
-                      {emojis.map((emoji, index) => (
-                        <button
-                          key={index}
-                          onClick={() => insertEmoji(emoji)}
-                          className="text-2xl hover:bg-white/10 rounded p-1 transition-colors"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
+                <div className="w-10 h-10 bg-gradient-to-br from-primary to-emerald-600 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0">
+                  {otherUser?.firstName?.[0] || otherUser?.userName?.[0] || <FontAwesomeIcon icon={faUser} />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-base font-semibold text-white truncate">
+                    {otherUser?.firstName && otherUser?.lastName
+                      ? `${otherUser.firstName} ${otherUser.lastName}`
+                      : otherUser?.userName || 'User'}
+                  </h2>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-slate-400 truncate">{conversation.service?.title}</p>
+                    {typingUsers.size > 0 && (
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <div className="flex gap-0.5">
+                          <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                          <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                          <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                        </div>
+                        <span className="text-xs text-primary italic">
+                          {Array.from(typingUsers).length === 1 ? 'typing...' : 'typing...'}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
-            </div>
-            <button
-              onClick={handleSendMessage}
-              disabled={!messageText.trim() || sending}
-              className={`p-2.5 rounded-full flex-shrink-0 transition-all ${
-                messageText.trim()
-                  ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-glow-primary'
-                  : 'glass-card text-slate-400 cursor-not-allowed'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-            >
-              {sending ? (
-                <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
-              ) : (
-                <FontAwesomeIcon icon={faPaperPlane} />
-              )}
-            </button>
-          </div>
-          </div>
-        </div>
-
-        {/* Milestones Sidebar */}
-        <div className="w-80 glass-card border-l border-white/10 flex flex-col flex-shrink-0 min-h-0">
-          <div className="p-4 border-b border-white/10 flex-shrink-0">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">Milestones</h3>
-            {isClient && (
-              <button
-                onClick={() => setShowMilestoneForm(!showMilestoneForm)}
-                className="text-primary hover:text-primary/80 transition-colors"
-              >
-                <FontAwesomeIcon icon={faPlus} />
+              <button className="text-slate-400 hover:text-primary transition-colors p-2">
+                <FontAwesomeIcon icon={faEllipsisV} />
               </button>
-            )}
-          </div>
-          {showMilestoneForm && isClient && (
-            <div className="glass-card rounded-xl p-4 space-y-3 mb-4">
-              <input
-                type="text"
-                placeholder="Title"
-                value={milestoneForm.title}
-                onChange={(e) => setMilestoneForm({ ...milestoneForm, title: e.target.value })}
-                className="w-full glass-card text-white rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 placeholder-slate-400 text-sm"
-              />
-              <textarea
-                placeholder="Description"
-                value={milestoneForm.description}
-                onChange={(e) => setMilestoneForm({ ...milestoneForm, description: e.target.value })}
-                className="w-full glass-card text-white rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 placeholder-slate-400 text-sm resize-none"
-                rows={3}
-              />
-              <input
-                type="number"
-                placeholder="Balance"
-                value={milestoneForm.balance}
-                onChange={(e) => setMilestoneForm({ ...milestoneForm, balance: e.target.value })}
-                className="w-full glass-card text-white rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 placeholder-slate-400 text-sm"
-              />
-              <div className="flex space-x-2">
-                <button
-                  onClick={handleCreateMilestone}
-                  className="flex-1 bg-primary text-primary-foreground px-4 py-2 rounded-full font-semibold hover:bg-primary/90 transition-colors text-sm shadow-glow-primary"
-                >
-                  Create
+            </div>
+
+            {/* Messages Area */}
+            <div className="flex-1 overflow-y-auto relative min-h-0">
+              <div className="relative p-4 space-y-1">
+                {(() => {
+                  // Combine messages, milestones, pending payments, and successful payments, sorted by creation time
+                  const pendingPaymentItems = Array.from(pendingPayments.entries()).map(([milestoneId, payment]) => {
+                    const milestone = milestones.find(m => m.id === milestoneId)
+                    return milestone ? {
+                      type: 'payment-pending' as const,
+                      data: { payment, milestone },
+                      createdAt: payment.updatedAt || payment.createdAt, // Use transaction updatedAt when status changed to PENDING
+                    } : null
+                  }).filter(Boolean) as Array<{ type: 'payment-pending'; data: { payment: Transaction; milestone: Milestone }; createdAt: string }>
+                  
+                  const successfulPaymentItems = Array.from(successfulPayments.entries()).map(([milestoneId, payment]) => {
+                    const milestone = milestones.find(m => m.id === milestoneId)
+                    return milestone ? {
+                      type: 'payment-success' as const,
+                      data: { payment, milestone },
+                      createdAt: payment.updatedAt || payment.createdAt, // Use transaction updatedAt when status changed to SUCCESS
+                    } : null
+                  }).filter(Boolean) as Array<{ type: 'payment-success'; data: { payment: Transaction; milestone: Milestone }; createdAt: string }>
+                  
+                  const allItems = [
+                    ...messages.map((m) => ({ type: 'message' as const, data: m, createdAt: m.createdAt })),
+                    ...milestones.map((mil) => ({ type: 'milestone' as const, data: mil, createdAt: mil.createdAt })),
+                    ...pendingPaymentItems,
+                    ...successfulPaymentItems,
+                  ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+
+                  let previousDate: Date | undefined
+
+                  return allItems.map((item) => {
+                    const itemDate = new Date(item.createdAt)
+                    const showDateSeparator = shouldShowDate(itemDate, previousDate)
+                    previousDate = itemDate
+
+                    if (item.type === 'message') {
+                      const message = item.data as Message
+                      const isOwn = message.senderId === user?.id
+                      const sender = message.sender
+
+                      return (
+                        <div key={`msg-${message.id}`}>
+                          {showDateSeparator && (
+                            <div className="flex justify-center my-4">
+                              <div className="glass-card text-slate-400 text-xs px-3 py-1 rounded-full">
+                                {itemDate.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                              </div>
+                            </div>
+                          )}
+                          <div className={`flex items-end gap-2 mb-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+                            {/* Avatar for incoming messages */}
+                            {!isOwn && (
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-emerald-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 mb-1">
+                                {sender?.firstName?.[0] || sender?.userName?.[0] || <FontAwesomeIcon icon={faUser} className="text-xs" />}
+                              </div>
+                            )}
+
+                            <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'} max-w-[65%] ${isOwn ? 'mr-0' : 'ml-0'}`}>
+                              {/* Sender name for incoming messages */}
+                              {!isOwn && sender && (
+                                <span className="text-slate-400 text-xs px-2 mb-0.5">
+                                  {sender.firstName && sender.lastName
+                                    ? `${sender.firstName} ${sender.lastName}`
+                                    : sender.userName || 'User'}
+                                </span>
+                              )}
+
+                              {/* Message bubble */}
+                              <div
+                                className={`relative px-3 py-2 rounded-2xl ${isOwn
+                                  ? 'bg-primary text-primary-foreground rounded-tr-sm'
+                                  : 'glass-card text-white rounded-tl-sm'
+                                  } shadow-sm`}
+                              >
+                                <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message.message}</p>
+
+                                {/* Timestamp and Read Status */}
+                                <div className={`flex items-center gap-1 mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                                  <span className={`text-[10px] ${isOwn ? 'text-primary-foreground/70' : 'text-slate-400'}`}>
+                                    {formatTime(new Date(message.createdAt))}
+                                  </span>
+                                  {isOwn && (
+                                    <FontAwesomeIcon
+                                      icon={message.readAt ? faCheckDouble : faCheck}
+                                      className={`text-[10px] ${message.readAt ? 'text-primary-foreground' : 'text-primary-foreground/50'}`}
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    } else if (item.type === 'milestone') {
+                      const milestone = item.data as Milestone
+                      const isOwn = milestone.clientId === user?.id
+
+                      return (
+                        <div key={`mil-${milestone.id}`}>
+                          {showDateSeparator && (
+                            <div className="flex justify-center my-4">
+                              <div className="bg-[#182533] text-[#708499] text-xs px-3 py-1 rounded-full">
+                                {itemDate.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                              </div>
+                            </div>
+                          )}
+                          <div className={`flex items-end gap-2 mb-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+                            <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'} max-w-[65%]`}>
+                              <div
+                                className={`relative px-4 py-3 rounded-2xl ${isOwn
+                                  ? 'bg-primary/20 border border-primary/30 text-white rounded-tr-sm'
+                                  : 'glass-card text-white rounded-tl-sm'
+                                  } shadow-lg`}
+                              >
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">Milestone</span>
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${getStatusColor(milestone.status)}`}>
+                                    {milestone.status}
+                                  </span>
+                                </div>
+                                <h4 className="font-semibold mb-1.5 text-base">{milestone.title}</h4>
+                                <p className="text-sm mb-3 opacity-90 leading-relaxed">{milestone.description}</p>
+                                <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                                  <span className="text-lg font-bold text-primary">${Number(milestone.balance).toFixed(2)}</span>
+                                  <span className={`text-[10px] ${isOwn ? 'text-primary' : 'text-slate-400'}`}>
+                                    {formatTime(new Date(milestone.createdAt))}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    } else if (item.type === 'payment-pending') {
+                      // Payment acceptance card (pending)
+                      const { payment, milestone } = item.data as { payment: Transaction; milestone: Milestone }
+                      const paymentIsOwn = milestone.clientId === user?.id
+
+                      return (
+                        <div key={`payment-${payment.id}`}>
+                          {showDateSeparator && (
+                            <div className="flex justify-center my-4">
+                              <div className="bg-[#182533] text-[#708499] text-xs px-3 py-1 rounded-full">
+                                {itemDate.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                              </div>
+                            </div>
+                          )}
+                          <div className={`flex items-end gap-2 mb-1 ${paymentIsOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+                            <div className={`flex flex-col ${paymentIsOwn ? 'items-end' : 'items-start'} max-w-[65%]`}>
+                              <div className={`relative px-4 py-3 rounded-2xl bg-gradient-to-r from-purple-500/20 via-pink-500/20 to-purple-500/20 border-2 border-purple-500/50 text-white shadow-lg ${
+                                paymentIsOwn ? 'rounded-tr-sm' : 'rounded-tl-sm'
+                              }`}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-[10px] font-semibold uppercase tracking-wider text-purple-400">Payment Pending</span>
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                                    {isClient ? 'WAITING FOR PROVIDER' : 'ACTION REQUIRED'}
+                                  </span>
+                                </div>
+                                <div className="flex items-start gap-3 mb-3">
+                                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
+                                    <FontAwesomeIcon icon={faMoneyBillWave} className="text-white text-lg" />
+                                  </div>
+                                  <div className="flex-1">
+                                    <h4 className="font-semibold mb-1 text-base text-white">
+                                      {isClient ? 'Payment Released - Awaiting Provider Acceptance' : 'Payment Pending Acceptance'}
+                                    </h4>
+                                    <p className="text-sm mb-2 opacity-90 leading-relaxed text-slate-300">
+                                      {isClient ? (
+                                        <>
+                                          You have released payment for milestone: <span className="font-semibold text-white">{milestone.title}</span>. Waiting for provider to accept.
+                                        </>
+                                      ) : (
+                                        <>
+                                          Client has released payment for milestone: <span className="font-semibold text-white">{milestone.title}</span>
+                                        </>
+                                      )}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-4 mb-3 p-2 rounded-lg bg-black/20">
+                                  <div>
+                                    <span className="text-slate-400 text-xs block mb-1">Amount</span>
+                                    <p className="text-primary font-bold text-xl">${Number(payment.amount).toFixed(2)}</p>
+                                  </div>
+                                  <div className="h-8 w-px bg-white/20"></div>
+                                  <div>
+                                    <span className="text-slate-400 text-xs block mb-1">Milestone</span>
+                                    <p className="text-white font-semibold text-sm">{milestone.title}</p>
+                                  </div>
+                                </div>
+                                {!isClient && (
+                                  <div className="flex gap-2 pt-2 border-t border-white/10">
+                                    <button
+                                      onClick={() => handleAcceptPayment(payment.id, milestone.id)}
+                                      disabled={acceptingPayment === payment.id}
+                                      className="flex-1 bg-gradient-to-r from-primary to-emerald-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:shadow-lg hover:shadow-primary/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+                                    >
+                                      {acceptingPayment === payment.id ? (
+                                        <>
+                                          <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
+                                          Accepting...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <FontAwesomeIcon icon={faCheckCircle} />
+                                          Accept Payment
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+                                )}
+                                {isClient && (
+                                  <div className="pt-2 border-t border-white/10">
+                                    <div className="flex items-center justify-center gap-2 text-slate-400 text-xs">
+                                      <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
+                                      <span>Waiting for provider to accept payment...</span>
+                                    </div>
+                                  </div>
+                                )}
+                                <div className={`flex items-center mt-2 ${paymentIsOwn ? 'justify-start' : 'justify-end'}`}>
+                                  <span className="text-[10px] text-slate-400">
+                                    {formatTime(new Date(payment.updatedAt || payment.createdAt))}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    } else {
+                      // Payment success card
+                      const { payment, milestone } = item.data as { payment: Transaction; milestone: Milestone }
+                      const paymentIsOwn = milestone.clientId === user?.id
+
+                      return (
+                        <div key={`payment-success-${payment.id}`}>
+                          {showDateSeparator && (
+                            <div className="flex justify-center my-4">
+                              <div className="bg-[#182533] text-[#708499] text-xs px-3 py-1 rounded-full">
+                                {itemDate.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                              </div>
+                            </div>
+                          )}
+                          <div className={`flex items-end gap-2 mb-1 ${paymentIsOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+                            <div className={`flex flex-col ${paymentIsOwn ? 'items-end' : 'items-start'} max-w-[65%]`}>
+                              <div className={`relative px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-500/20 via-green-500/20 to-emerald-500/20 border-2 border-emerald-500/50 text-white shadow-lg ${
+                                paymentIsOwn ? 'rounded-tr-sm' : 'rounded-tl-sm'
+                              }`}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400">Payment Successful</span>
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                    COMPLETED
+                                  </span>
+                                </div>
+                                <div className="flex items-start gap-3 mb-3">
+                                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-green-500 flex items-center justify-center flex-shrink-0">
+                                    <FontAwesomeIcon icon={faCheckCircle} className="text-white text-lg" />
+                                  </div>
+                                  <div className="flex-1">
+                                    <h4 className="font-semibold mb-1 text-base text-white">
+                                      {isClient ? 'Payment Completed Successfully' : 'Payment Received Successfully'}
+                                    </h4>
+                                    <p className="text-sm mb-2 opacity-90 leading-relaxed text-slate-300">
+                                      {isClient ? (
+                                        <>
+                                          Provider has accepted your payment for milestone: <span className="font-semibold text-white">{milestone.title}</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          You have successfully received payment for milestone: <span className="font-semibold text-white">{milestone.title}</span>
+                                        </>
+                                      )}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-4 mb-3 p-2 rounded-lg bg-black/20">
+                                  <div>
+                                    <span className="text-slate-400 text-xs block mb-1">Amount</span>
+                                    <p className="text-emerald-400 font-bold text-xl">${Number(payment.amount).toFixed(2)}</p>
+                                  </div>
+                                  <div className="h-8 w-px bg-white/20"></div>
+                                  <div>
+                                    <span className="text-slate-400 text-xs block mb-1">Milestone</span>
+                                    <p className="text-white font-semibold text-sm">{milestone.title}</p>
+                                  </div>
+                                </div>
+                                <div className="pt-2 border-t border-white/10">
+                                  <div className="flex items-center justify-center gap-2 text-emerald-400 text-xs">
+                                    <FontAwesomeIcon icon={faCheckCircle} />
+                                    <span>Payment processed successfully</span>
+                                  </div>
+                                </div>
+                                <div className={`flex items-center mt-2 ${paymentIsOwn ? 'justify-start' : 'justify-end'}`}>
+                                  <span className="text-[10px] text-slate-400">
+                                    {formatTime(new Date(payment.updatedAt || payment.createdAt))}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    }
+                  })
+                })()}
+                <div ref={messagesEndRef} />
+              </div>
+            </div>
+
+            {/* Input Area */}
+            <div className="glass-card border-t border-white/10 px-4 py-3 flex-shrink-0">
+              <div className="flex items-end gap-2">
+                <button className="text-slate-400 hover:text-primary transition-colors p-2 flex-shrink-0">
+                  <FontAwesomeIcon icon={faPaperclip} />
                 </button>
+                <div className="flex-1 relative">
+                  <textarea
+                    ref={textareaRef}
+                    value={messageText}
+                    onChange={(e) => {
+                      setMessageText(e.target.value)
+                      handleTyping()
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        handleSendMessage()
+                      } else {
+                        handleTyping()
+                      }
+                    }}
+                    placeholder="Type a message..."
+                    rows={1}
+                    className="w-full glass-card text-white rounded-2xl px-4 py-2.5 pr-12 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 resize-none max-h-32 overflow-y-auto placeholder-slate-400 text-sm leading-5"
+                    style={{ minHeight: '42px', maxHeight: '128px' }}
+                  />
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                      className="text-slate-400 hover:text-primary transition-colors p-2 absolute right-1 bottom-1"
+                    >
+                      <FontAwesomeIcon icon={faSmile} />
+                    </button>
+                    {showEmojiPicker && (
+                      <div
+                        ref={emojiPickerRef}
+                        className="absolute bottom-12 right-0 glass-card rounded-2xl shadow-2xl p-3 w-64 h-64 overflow-y-auto z-50"
+                      >
+                        <div className="grid grid-cols-8 gap-1">
+                          {emojis.map((emoji, index) => (
+                            <button
+                              key={index}
+                              onClick={() => insertEmoji(emoji)}
+                              className="text-2xl hover:bg-white/10 rounded p-1 transition-colors"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <button
-                  onClick={() => {
-                    setShowMilestoneForm(false)
-                    setMilestoneForm({ title: '', description: '', balance: '' })
-                  }}
-                  className="flex-1 glass-card text-white px-4 py-2 rounded-full font-semibold hover:bg-white/15 transition-colors text-sm"
+                  onClick={handleSendMessage}
+                  disabled={!messageText.trim() || sending}
+                  className={`p-2.5 rounded-full flex-shrink-0 transition-all ${messageText.trim()
+                    ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-glow-primary'
+                    : 'glass-card text-slate-400 cursor-not-allowed'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
-                  Cancel
+                  {sending ? (
+                    <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
+                  ) : (
+                    <FontAwesomeIcon icon={faPaperPlane} />
+                  )}
                 </button>
               </div>
             </div>
-          )}
-        </div>
+          </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
-            {milestones.length === 0 ? (
-            <p className="text-slate-400 text-center text-sm py-8">No milestones yet</p>
-          ) : (
-            milestones.map((milestone) => (
-              <div key={milestone.id} className="glass-card rounded-xl p-4 space-y-3 hover:border-primary/20 transition-colors">
-                <div className="flex items-start justify-between">
-                  <h4 className="font-semibold text-white text-sm">{milestone.title}</h4>
-                  <span className={`px-2 py-1 rounded-full text-[10px] font-semibold text-white ${getStatusColor(milestone.status)}`}>
-                    {milestone.status}
-                  </span>
-                </div>
-                <p className="text-sm text-slate-400 leading-relaxed">{milestone.description}</p>
-                <div className="flex items-center justify-between pt-2 border-t border-white/10">
-                  <span className="text-base font-bold text-primary">${Number(milestone.balance).toFixed(2)}</span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {milestone.status === 'draft' && (
-                    <>
-                      {!isClient && (
-                        <button
-                          onClick={() => handleMilestoneAction(milestone.id, 'accept')}
-                          disabled={updatingMilestone === milestone.id}
-                          className="flex-1 bg-primary text-primary-foreground px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-1 shadow-glow-primary"
-                        >
-                          <FontAwesomeIcon icon={faCheck} className="text-xs" />
-                          Accept
-                        </button>
-                      )}
-                      {isClient && (
-                        <button
-                          onClick={() => handleMilestoneAction(milestone.id, 'cancel')}
-                          disabled={updatingMilestone === milestone.id}
-                          className="flex-1 bg-red-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
-                        >
-                          <FontAwesomeIcon icon={faTimes} className="text-xs" />
-                          Cancel
-                        </button>
-                      )}
-                    </>
-                  )}
-                  {milestone.status === 'processing' && (
-                    <>
-                      {!isClient && (
-                        <>
-                          <button
-                            onClick={() => handleMilestoneAction(milestone.id, 'complete')}
-                            disabled={updatingMilestone === milestone.id}
-                            className="flex-1 bg-[#2b5278] text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-[#3a6a95] transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
-                          >
-                            <FontAwesomeIcon icon={faCheckCircle} className="text-xs" />
-                            Complete
-                          </button>
-                          <button
-                            onClick={() => handleMilestoneAction(milestone.id, 'withdraw')}
-                            disabled={updatingMilestone === milestone.id}
-                            className="flex-1 bg-yellow-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-yellow-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
-                          >
-                            <FontAwesomeIcon icon={faMoneyBillWave} className="text-xs" />
-                            Withdraw
-                          </button>
-                        </>
-                      )}
-                      {isClient && (
-                        <button
-                          onClick={() => handleMilestoneAction(milestone.id, 'cancel')}
-                          disabled={updatingMilestone === milestone.id}
-                          className="flex-1 bg-red-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
-                        >
-                          <FontAwesomeIcon icon={faBan} className="text-xs" />
-                          Cancel
-                        </button>
-                      )}
-                    </>
-                  )}
-                  {milestone.status === 'completed' && (
-                    <>
-                      {isClient && (
-                        <>
-                          <button
-                            onClick={() => handleMilestoneAction(milestone.id, 'release')}
-                            disabled={updatingMilestone === milestone.id}
-                            className="flex-1 bg-purple-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
-                          >
-                            <FontAwesomeIcon icon={faCheckCircle} className="text-xs" />
-                            Release
-                          </button>
-                          <button
-                            onClick={() => handleMilestoneAction(milestone.id, 'dispute')}
-                            disabled={updatingMilestone === milestone.id}
-                            className="flex-1 bg-yellow-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-yellow-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
-                          >
-                            <FontAwesomeIcon icon={faGavel} className="text-xs" />
-                            Dispute
-                          </button>
-                        </>
-                      )}
-                      {!isClient && (
-                        <button
-                          onClick={() => handleMilestoneAction(milestone.id, 'dispute')}
-                          disabled={updatingMilestone === milestone.id}
-                          className="flex-1 bg-yellow-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-yellow-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
-                        >
-                          <FontAwesomeIcon icon={faGavel} className="text-xs" />
-                          Dispute
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
+          {/* Milestones Sidebar */}
+          <div className="w-80 glass-card border-l border-white/10 flex flex-col flex-shrink-0 min-h-0">
+            <div className="p-4 border-b border-white/10 flex-shrink-0">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">Milestones</h3>
+                {isClient && (
+                  <button
+                    onClick={() => setShowMilestoneForm(!showMilestoneForm)}
+                    className="text-primary hover:text-primary/80 transition-colors"
+                  >
+                    <FontAwesomeIcon icon={faPlus} />
+                  </button>
+                )}
               </div>
-            ))
-          )}
+              {showMilestoneForm && isClient && (
+                <div className="glass-card rounded-xl p-4 space-y-3 mb-4">
+                  <input
+                    type="text"
+                    placeholder="Title"
+                    value={milestoneForm.title}
+                    onChange={(e) => setMilestoneForm({ ...milestoneForm, title: e.target.value })}
+                    className="w-full glass-card text-white rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 placeholder-slate-400 text-sm"
+                  />
+                  <textarea
+                    placeholder="Description"
+                    value={milestoneForm.description}
+                    onChange={(e) => setMilestoneForm({ ...milestoneForm, description: e.target.value })}
+                    className="w-full glass-card text-white rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 placeholder-slate-400 text-sm resize-none"
+                    rows={3}
+                  />
+                  <input
+                    type="number"
+                    placeholder="Balance"
+                    value={milestoneForm.balance}
+                    onChange={(e) => setMilestoneForm({ ...milestoneForm, balance: e.target.value })}
+                    className="w-full glass-card text-white rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 placeholder-slate-400 text-sm"
+                  />
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={handleCreateMilestone}
+                      className="flex-1 bg-primary text-primary-foreground px-4 py-2 rounded-full font-semibold hover:bg-primary/90 transition-colors text-sm shadow-glow-primary"
+                    >
+                      Create
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowMilestoneForm(false)
+                        setMilestoneForm({ title: '', description: '', balance: '' })
+                      }}
+                      className="flex-1 glass-card text-white px-4 py-2 rounded-full font-semibold hover:bg-white/15 transition-colors text-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
+              {milestones.length === 0 ? (
+                <p className="text-slate-400 text-center text-sm py-8">No milestones yet</p>
+              ) : (
+                milestones.map((milestone) => (
+                  <div key={milestone.id} className="glass-card rounded-xl p-4 space-y-3 hover:border-primary/20 transition-colors">
+                    <div className="flex items-start justify-between">
+                      <h4 className="font-semibold text-white text-sm">{milestone.title}</h4>
+                      <span className={`px-2 py-1 rounded-full text-[10px] font-semibold text-white ${getStatusColor(milestone.status)}`}>
+                        {milestone.status}
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-400 leading-relaxed">{milestone.description}</p>
+                    <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                      <span className="text-base font-bold text-primary">${Number(milestone.balance).toFixed(2)}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {milestone.status === 'draft' && (
+                        <>
+                          {!isClient && (
+                            <button
+                              onClick={() => handleMilestoneAction(milestone.id, 'accept')}
+                              disabled={updatingMilestone === milestone.id}
+                              className="flex-1 bg-primary text-primary-foreground px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-1 shadow-glow-primary"
+                            >
+                              <FontAwesomeIcon icon={faCheck} className="text-xs" />
+                              Accept
+                            </button>
+                          )}
+                          {isClient && (
+                            <button
+                              onClick={() => handleMilestoneAction(milestone.id, 'cancel')}
+                              disabled={updatingMilestone === milestone.id}
+                              className="flex-1 bg-red-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                            >
+                              <FontAwesomeIcon icon={faTimes} className="text-xs" />
+                              Cancel
+                            </button>
+                          )}
+                        </>
+                      )}
+                      {milestone.status === 'processing' && (
+                        <>
+                          {!isClient && (
+                            <>
+                              <button
+                                onClick={() => handleMilestoneAction(milestone.id, 'complete')}
+                                disabled={updatingMilestone === milestone.id}
+                                className="flex-1 bg-[#2b5278] text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-[#3a6a95] transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                              >
+                                <FontAwesomeIcon icon={faCheckCircle} className="text-xs" />
+                                Complete
+                              </button>
+                              <button
+                                onClick={() => handleMilestoneAction(milestone.id, 'withdraw')}
+                                disabled={updatingMilestone === milestone.id}
+                                className="flex-1 bg-yellow-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-yellow-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                              >
+                                <FontAwesomeIcon icon={faMoneyBillWave} className="text-xs" />
+                                Withdraw
+                              </button>
+                            </>
+                          )}
+                          {isClient && (
+                            <button
+                              onClick={() => handleMilestoneAction(milestone.id, 'cancel')}
+                              disabled={updatingMilestone === milestone.id}
+                              className="flex-1 bg-red-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                            >
+                              <FontAwesomeIcon icon={faBan} className="text-xs" />
+                              Cancel
+                            </button>
+                          )}
+                        </>
+                      )}
+                      {milestone.status === 'completed' && (
+                        <>
+                          {isClient && (
+                            <>
+                              <button
+                                onClick={() => handleMilestoneAction(milestone.id, 'release')}
+                                disabled={updatingMilestone === milestone.id}
+                                className="flex-1 bg-purple-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                              >
+                                <FontAwesomeIcon icon={faCheckCircle} className="text-xs" />
+                                Release
+                              </button>
+                              <button
+                                onClick={() => handleMilestoneAction(milestone.id, 'dispute')}
+                                disabled={updatingMilestone === milestone.id}
+                                className="flex-1 bg-yellow-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-yellow-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                              >
+                                <FontAwesomeIcon icon={faGavel} className="text-xs" />
+                                Dispute
+                              </button>
+                            </>
+                          )}
+                          {!isClient && (
+                            <button
+                              onClick={() => handleMilestoneAction(milestone.id, 'dispute')}
+                              disabled={updatingMilestone === milestone.id}
+                              className="flex-1 bg-yellow-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-yellow-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                            >
+                              <FontAwesomeIcon icon={faGavel} className="text-xs" />
+                              Dispute
+                            </button>
+                          )}
+                        </>
+                      )}
+                      {milestone.status === 'released' && (
+                        <>
+                          {isClient && (
+                            <button
+                              onClick={() => handleMilestoneAction(milestone.id, 'dispute')}
+                              disabled={updatingMilestone === milestone.id}
+                              className="flex-1 bg-yellow-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-yellow-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                            >
+                              <FontAwesomeIcon icon={faGavel} className="text-xs" />
+                              Dispute
+                            </button>
+                          )}
+                          {!isClient && (
+                            <button
+                              onClick={() => handleMilestoneAction(milestone.id, 'dispute')}
+                              disabled={updatingMilestone === milestone.id}
+                              className="flex-1 bg-yellow-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-yellow-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                            >
+                              <FontAwesomeIcon icon={faGavel} className="text-xs" />
+                              Dispute
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -666,69 +666,128 @@ export const milestoneApi = {
   },
 };
 
-export interface Wallet {
+export interface Balance {
   id: string;
   userId: string;
-  walletAddress: string;
-  walletType: string;
-  isConnected: boolean;
-  connectedAt?: string;
-  balance?: number;
+  amount: number;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface Transaction {
   id: string;
+  clientId?: string;
+  providerId?: string;
   milestoneId?: string;
-  fromUserId?: string;
-  toUserId?: string;
-  fromWalletAddress: string;
-  toWalletAddress: string;
+  type: 'charge' | 'withdraw' | 'milestone_payment';
+  status: 'draft' | 'pending' | 'success' | 'failed' | 'cancelled';
   amount: number;
-  tokenType: string;
-  tokenStandard: string;
-  type: 'payment' | 'release' | 'refund' | 'withdraw';
-  status: 'pending' | 'completed' | 'failed';
-  txHash?: string;
-  blockNumber?: number;
-  error?: string;
-  tempWalletAddress?: string;
+  transactionHash?: string;
+  walletAddress?: string;
+  description?: string;
+  client?: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    userName?: string;
+  };
+  provider?: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    userName?: string;
+  };
   createdAt: string;
   updatedAt: string;
 }
 
-export const walletApi = {
-  connect: async (walletAddress: string): Promise<Wallet> => {
-    const response = await api.post('/wallet/connect', { walletAddress });
+export interface ChargeData {
+  amount: number;
+  transactionHash: string;
+}
+
+export interface InitiateChargeData {
+  amount: number;
+}
+
+export interface ChargeStatusResponse {
+  walletAddress: string;
+  amount: number;
+  gasFee: number;
+  platformFee: number;
+  total: number;
+  transactionId: string;
+  expiresAt: string;
+}
+
+export interface WithdrawData {
+  amount: number;
+  walletAddress: string;
+}
+
+export const paymentApi = {
+  getBalance: async (): Promise<Balance> => {
+    const response = await api.get('/payment/balance');
     return response.data;
   },
 
-  getMyWallet: async (): Promise<Wallet | null> => {
-    const response = await api.get('/wallet/me');
+  initiateCharge: async (data: InitiateChargeData): Promise<ChargeStatusResponse> => {
+    const response = await api.post('/payment/charge/initiate', data);
     return response.data;
   },
 
-  getBalance: async (address: string): Promise<{ address: string; balance: number }> => {
-    const response = await api.get(`/wallet/balance/${address}`);
+  getChargeStatus: async (transactionId: string): Promise<{
+    status: string;
+    transactionHash?: string;
+    confirmedAt?: string;
+  }> => {
+    const response = await api.get(`/payment/charge/status/${transactionId}`);
     return response.data;
   },
 
-  getTransactions: async (): Promise<Transaction[]> => {
-    const response = await api.get('/wallet/transactions');
+  charge: async (data: ChargeData): Promise<Transaction> => {
+    const response = await api.post('/payment/charge', data);
     return response.data;
   },
 
-  getMilestoneTransactions: async (milestoneId: string): Promise<Transaction[]> => {
-    const response = await api.get(`/wallet/transactions/milestone/${milestoneId}`);
+  withdraw: async (data: WithdrawData): Promise<Transaction> => {
+    const response = await api.post('/payment/withdraw', data);
     return response.data;
   },
 
-  updateTransactionHash: async (transactionId: string, txHash: string): Promise<Transaction> => {
-    const response = await api.patch(`/wallet/transactions/${transactionId}/hash`, { txHash });
+  getWithdrawStatus: async (transactionId: string): Promise<{
+    status: string;
+    transactionHash?: string;
+    confirmedAt?: string;
+  }> => {
+    const response = await api.get(`/payment/withdraw/status/${transactionId}`);
+    return response.data;
+  },
+
+  getTransactions: async (params?: {
+    page?: number;
+    limit?: number;
+  }): Promise<{ data: Transaction[]; total: number; page: number; limit: number; totalPages: number }> => {
+    const response = await api.get('/payment/transactions', { params });
+    return response.data;
+  },
+
+  acceptPayment: async (transactionId: string): Promise<Transaction> => {
+    const response = await api.post(`/payment/accept-payment/${transactionId}`);
+    return response.data;
+  },
+
+  getPendingPaymentByMilestone: async (milestoneId: string): Promise<Transaction | null> => {
+    const response = await api.get(`/payment/pending-payment/milestone/${milestoneId}`);
+    return response.data;
+  },
+
+  getSuccessfulPaymentByMilestone: async (milestoneId: string): Promise<Transaction | null> => {
+    const response = await api.get(`/payment/successful-payment/milestone/${milestoneId}`);
     return response.data;
   },
 };
+
 
 export default api;
 

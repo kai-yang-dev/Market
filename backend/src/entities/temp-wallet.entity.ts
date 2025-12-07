@@ -1,23 +1,39 @@
 import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { BaseEntity } from './base.entity';
-import { Milestone } from './milestone.entity';
+import { User } from './user.entity';
+
+export enum TempWalletStatus {
+  ACTIVE = 'ACTIVE',
+  COMPLETED = 'COMPLETED',
+  INACTIVE = 'INACTIVE',
+}
 
 @Entity('temp_wallets')
 export class TempWallet extends BaseEntity {
-  @Column({ name: 'milestone_id', unique: true })
-  milestoneId: string;
+  @Column({ name: 'user_id' })
+  userId: string;
 
-  @ManyToOne(() => Milestone)
-  @JoinColumn({ name: 'milestone_id' })
-  milestone: Milestone;
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'user_id' })
+  user: User;
 
-  @Column({ name: 'wallet_address' })
-  walletAddress: string;
+  @Column({ name: 'address', unique: true })
+  address: string; // TRC20 wallet address
 
   @Column({ name: 'private_key', type: 'text' })
-  privateKey: string;
+  privateKey: string; // Encrypted private key
 
-  @Column({ name: 'is_active', default: true })
-  isActive: boolean;
+  @Column({
+    type: 'enum',
+    enum: TempWalletStatus,
+    default: TempWalletStatus.ACTIVE,
+  })
+  status: TempWalletStatus;
+
+  @Column({ name: 'last_checked_at', nullable: true })
+  lastCheckedAt?: Date;
+
+  @Column({ name: 'total_received', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  totalReceived: number;
 }
 

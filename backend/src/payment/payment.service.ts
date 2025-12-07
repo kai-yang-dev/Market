@@ -1,149 +1,539 @@
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
-const TronWebLib = require('tronweb');
+import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, DataSource } from 'typeorm';
+import { Balance } from '../entities/balance.entity';
+import { Transaction, TransactionType, TransactionStatus } from '../entities/transaction.entity';
+import { User } from '../entities/user.entity';
+import { ChargeDto } from './dto/charge.dto';
+import { InitiateChargeDto } from './dto/initiate-charge.dto';
+import { WithdrawDto } from './dto/withdraw.dto';
+import { ChatGateway } from '../chat/chat.gateway';
+import { Milestone } from '../entities/milestone.entity';
+import { Conversation } from '../entities/conversation.entity';
+import { WalletService } from '../wallet/wallet.service';
 
 @Injectable()
 export class PaymentService {
-  private readonly logger = new Logger(PaymentService.name);
-  private tronWeb: any;
-  private readonly USDT_CONTRACT_ADDRESS = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'; // USDT TRC20 mainnet
+  constructor(
+    @InjectRepository(Balance)
+    private balanceRepository: Repository<Balance>,
+    @InjectRepository(Transaction)
+    private transactionRepository: Repository<Transaction>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+    @InjectRepository(Milestone)
+    private milestoneRepository: Repository<Milestone>,
+    @InjectRepository(Conversation)
+    private conversationRepository: Repository<Conversation>,
+    private dataSource: DataSource,
+    @Inject(forwardRef(() => ChatGateway))
+    private chatGateway: ChatGateway,
+    @Inject(forwardRef(() => WalletService))
+    private walletService: WalletService,
+  ) {}
 
-  constructor() {
-    // Initialize TronWeb - using mainnet
-    // TronWeb class is at TronWebLib.TronWeb
-    const TronWeb = TronWebLib.TronWeb || TronWebLib.default?.TronWeb || TronWebLib;
-    this.tronWeb = new TronWeb({
-      fullHost: 'https://api.trongrid.io',
+  async getBalance(userId: string): Promise<Balance> {
+    let balance = await this.balanceRepository.findOne({
+      where: { userId },
+    });
+
+    if (!balance) {
+      balance = this.balanceRepository.create({
+        userId,
+        amount: 0,
+      });
+      balance = await this.balanceRepository.save(balance);
+    }
+
+    return balance;
+  }
+
+  async initiateCharge(userId: string, initiateChargeDto: InitiateChargeDto): Promise<{
+    walletAddress: string;
+    amount: number;
+    gasFee: number;
+    platformFee: number;
+    total: number;
+    transactionId: string;
+    expiresAt: Date;
+  }> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Get or create temp wallet
+      const tempWallet = await this.walletService.getOrCreateTempWallet(userId);
+
+      // Calculate fees
+      const platformFee = 1; // $1 USDT fixed
+      const gasFee = await this.walletService.estimateGasFee();
+      const total = Number(initiateChargeDto.amount) + gasFee + platformFee;
+
+      // Set expiration (24 hours from now)
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24);
+
+      // Create pending transaction
+      const transaction = queryRunner.manager.create(Transaction, {
+        clientId: userId,
+        type: TransactionType.CHARGE,
+        status: TransactionStatus.PENDING,
+        amount: initiateChargeDto.amount,
+        expectedAmount: initiateChargeDto.amount,
+        gasFee: gasFee,
+        platformFee: platformFee,
+        tempWalletId: tempWallet.id,
+        expiresAt: expiresAt,
+        description: `Charge ${initiateChargeDto.amount} USDT`,
+      });
+
+      const savedTransaction = await queryRunner.manager.save(transaction);
+
+      await queryRunner.commitTransaction();
+
+      return {
+        walletAddress: tempWallet.address,
+        amount: initiateChargeDto.amount,
+        gasFee: gasFee,
+        platformFee: platformFee,
+        total: total,
+        transactionId: savedTransaction.id,
+        expiresAt: expiresAt,
+      };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async getChargeStatus(transactionId: string, userId: string): Promise<{
+    status: string;
+    transactionHash?: string;
+    confirmedAt?: Date;
+  }> {
+    const transaction = await this.transactionRepository.findOne({
+      where: { id: transactionId, clientId: userId, type: TransactionType.CHARGE },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('Transaction not found');
+    }
+
+    return {
+      status: transaction.status,
+      transactionHash: transaction.transactionHash,
+      confirmedAt: transaction.status === TransactionStatus.SUCCESS ? transaction.updatedAt : undefined,
+    };
+  }
+
+  async charge(userId: string, chargeDto: ChargeDto): Promise<Transaction> {
+    // Legacy method - kept for backward compatibility
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Check if transaction hash already exists
+      const existingTransaction = await queryRunner.manager.findOne(Transaction, {
+        where: { transactionHash: chargeDto.transactionHash },
+      });
+
+      if (existingTransaction) {
+        throw new BadRequestException('Transaction hash already exists');
+      }
+
+      // Get or create balance
+      let balance = await queryRunner.manager.findOne(Balance, {
+        where: { userId },
+      });
+
+      if (!balance) {
+        balance = queryRunner.manager.create(Balance, {
+          userId,
+          amount: 0,
+        });
+        balance = await queryRunner.manager.save(balance);
+      }
+
+      // Create transaction
+      // For charge, the user is the client (charging their own account)
+      const transaction = queryRunner.manager.create(Transaction, {
+        clientId: userId,
+        type: TransactionType.CHARGE,
+        status: TransactionStatus.PENDING,
+        amount: chargeDto.amount,
+        transactionHash: chargeDto.transactionHash,
+        description: `Charge ${chargeDto.amount} USDT`,
+      });
+
+      const savedTransaction = await queryRunner.manager.save(transaction);
+
+      // Update balance
+      balance.amount = Number(balance.amount) + Number(chargeDto.amount);
+      await queryRunner.manager.save(balance);
+
+      // Update transaction status to success
+      savedTransaction.status = TransactionStatus.SUCCESS;
+      await queryRunner.manager.save(savedTransaction);
+
+      await queryRunner.commitTransaction();
+
+      return savedTransaction;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async withdraw(userId: string, withdrawDto: WithdrawDto): Promise<Transaction> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Get balance
+      const balance = await queryRunner.manager.findOne(Balance, {
+        where: { userId },
+      });
+
+      // Calculate fees
+      const platformFee = 1; // $1 USDT fixed
+      const gasFee = await this.walletService.estimateGasFee();
+      const totalDeduction = Number(withdrawDto.amount) + platformFee;
+
+      if (!balance || Number(balance.amount) < totalDeduction) {
+        throw new BadRequestException('Insufficient balance');
+      }
+
+      // Get user's temp wallet
+      const tempWallet = await this.walletService.getTempWallet(userId);
+      if (!tempWallet) {
+        throw new BadRequestException('No wallet found. Please charge your account first.');
+      }
+
+      // Check if wallet has enough TRX for gas
+      const trxBalance = await this.walletService.getTRXBalance(tempWallet.address);
+      if (trxBalance < 10) {
+        throw new BadRequestException('Insufficient TRX in wallet for gas. Please ensure wallet has at least 10 TRX.');
+      }
+
+      // Create transaction
+      const transaction = queryRunner.manager.create(Transaction, {
+        clientId: userId,
+        type: TransactionType.WITHDRAW,
+        status: TransactionStatus.PENDING,
+        amount: withdrawDto.amount,
+        gasFee: gasFee,
+        platformFee: platformFee,
+        walletAddress: withdrawDto.walletAddress,
+        tempWalletId: tempWallet.id,
+        description: `Withdraw ${withdrawDto.amount} USDT to ${withdrawDto.walletAddress}`,
+      });
+
+      const savedTransaction = await queryRunner.manager.save(transaction);
+
+      // Lock balance (deduct)
+      balance.amount = Number(balance.amount) - totalDeduction;
+      await queryRunner.manager.save(balance);
+
+      await queryRunner.commitTransaction();
+
+      // Execute blockchain transaction
+      try {
+        const privateKey = await this.walletService.getDecryptedPrivateKey(tempWallet);
+        const transactionHash = await this.walletService.sendUSDT(
+          privateKey,
+          withdrawDto.walletAddress,
+          withdrawDto.amount,
+        );
+
+        // Update transaction with hash and success status
+        savedTransaction.transactionHash = transactionHash;
+        savedTransaction.status = TransactionStatus.SUCCESS;
+        await this.transactionRepository.save(savedTransaction);
+
+        return savedTransaction;
+      } catch (error) {
+        // Refund on failure
+        balance.amount = Number(balance.amount) + totalDeduction;
+        await this.balanceRepository.save(balance);
+
+        savedTransaction.status = TransactionStatus.FAILED;
+        await this.transactionRepository.save(savedTransaction);
+
+        throw new BadRequestException(`Withdrawal failed: ${error.message}`);
+      }
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async getWithdrawStatus(transactionId: string, userId: string): Promise<{
+    status: string;
+    transactionHash?: string;
+    confirmedAt?: Date;
+  }> {
+    const transaction = await this.transactionRepository.findOne({
+      where: { id: transactionId, clientId: userId, type: TransactionType.WITHDRAW },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('Transaction not found');
+    }
+
+    return {
+      status: transaction.status,
+      transactionHash: transaction.transactionHash,
+      confirmedAt: transaction.status === TransactionStatus.SUCCESS ? transaction.updatedAt : undefined,
+    };
+  }
+
+  async getTransactions(
+    userId: string,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<{ data: Transaction[]; total: number; page: number; limit: number; totalPages: number }> {
+    const skip = (page - 1) * limit;
+
+    const [transactions, total] = await this.transactionRepository.findAndCount({
+      where: [
+        { clientId: userId },
+        { providerId: userId },
+      ],
+      relations: ['milestone', 'client', 'provider'],
+      order: { createdAt: 'DESC' },
+      skip,
+      take: limit,
+    });
+
+    return {
+      data: transactions,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async createMilestoneTransaction(
+    userId: string,
+    milestoneId: string,
+    amount: number,
+    clientId: string,
+    providerId: string,
+  ): Promise<Transaction> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Get balance
+      const balance = await queryRunner.manager.findOne(Balance, {
+        where: { userId },
+      });
+
+      if (!balance || Number(balance.amount) < Number(amount)) {
+        throw new BadRequestException('Insufficient balance');
+      }
+
+      // Create transaction for milestone payment
+      // Client pays, so clientId is set, providerId is set for reference
+      const transaction = queryRunner.manager.create(Transaction, {
+        clientId,
+        providerId,
+        milestoneId,
+        type: TransactionType.MILESTONE_PAYMENT,
+        status: TransactionStatus.DRAFT,
+        amount,
+        description: `Milestone payment`,
+      });
+
+      const savedTransaction = await queryRunner.manager.save(transaction);
+
+      // Update balance
+      balance.amount = Number(balance.amount) - Number(amount);
+      await queryRunner.manager.save(balance);
+
+      await queryRunner.commitTransaction();
+
+      return savedTransaction;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async releaseMilestoneTransaction(milestoneId: string, providerId: string): Promise<Transaction> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Find the transaction - check for DRAFT status first, but also allow SUCCESS in case it was already processed
+      let transaction = await queryRunner.manager.findOne(Transaction, {
+        where: { milestoneId, status: TransactionStatus.DRAFT },
+      });
+
+      // If not found with DRAFT status, try to find any transaction for this milestone
+      if (!transaction) {
+        transaction = await queryRunner.manager.findOne(Transaction, {
+          where: { milestoneId },
+        });
+      }
+
+      if (!transaction) {
+        throw new NotFoundException('Transaction not found for this milestone');
+      }
+
+      // Only update if it's in DRAFT status
+      if (transaction.status !== TransactionStatus.DRAFT) {
+        throw new BadRequestException(`Transaction is already in ${transaction.status} status and cannot be released`);
+      }
+
+      // Update transaction status to PENDING (waiting for provider acceptance)
+      // Don't create a new transaction record, just update the existing one
+      transaction.status = TransactionStatus.PENDING;
+      transaction.description = `Milestone payment - awaiting acceptance`;
+      await queryRunner.manager.save(transaction);
+
+      await queryRunner.commitTransaction();
+
+      return transaction;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async acceptPayment(transactionId: string, userId: string): Promise<Transaction> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Find the pending transaction
+      const transaction = await queryRunner.manager.findOne(Transaction, {
+        where: { id: transactionId, status: TransactionStatus.PENDING },
+      });
+
+      if (!transaction) {
+        throw new NotFoundException('Pending payment not found');
+      }
+
+      // Verify user is the provider
+      if (transaction.providerId !== userId) {
+        throw new BadRequestException('Only the provider can accept this payment');
+      }
+
+      // Update transaction status to SUCCESS
+      transaction.status = TransactionStatus.SUCCESS;
+      transaction.description = `Milestone payment received`;
+      await queryRunner.manager.save(transaction);
+
+      // Get or create provider balance
+      let providerBalance = await queryRunner.manager.findOne(Balance, {
+        where: { userId },
+      });
+
+      if (!providerBalance) {
+        providerBalance = queryRunner.manager.create(Balance, {
+          userId,
+          amount: 0,
+        });
+        providerBalance = await queryRunner.manager.save(providerBalance);
+      }
+
+      // Update provider balance
+      providerBalance.amount = Number(providerBalance.amount) + Number(transaction.amount);
+      await queryRunner.manager.save(providerBalance);
+
+      await queryRunner.commitTransaction();
+
+      // Load transaction with relations for WebSocket emission
+      const transactionWithRelations = await this.transactionRepository.findOne({
+        where: { id: transaction.id },
+        relations: ['client', 'provider', 'milestone'],
+      });
+
+      // Get conversationId from milestone to emit WebSocket event
+      if (transactionWithRelations?.milestone) {
+        const conversation = await this.conversationRepository.findOne({
+          where: [
+            { clientId: transactionWithRelations.milestone.clientId, providerId: transactionWithRelations.milestone.providerId },
+          ],
+        });
+
+        if (conversation) {
+          // Emit payment accepted event to all users in the conversation
+          this.chatGateway.server.to(`conversation:${conversation.id}`).emit('payment_accepted', {
+            transaction: transactionWithRelations,
+            milestoneId: transactionWithRelations.milestone.id,
+            conversationId: conversation.id,
+          });
+        }
+      }
+
+      return transaction;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async getPendingPaymentByMilestone(milestoneId: string, userId: string): Promise<Transaction | null> {
+    // Find pending payment where user is either the client or the provider
+    return this.transactionRepository.findOne({
+      where: [
+        {
+          milestoneId,
+          clientId: userId,
+          status: TransactionStatus.PENDING,
+          type: TransactionType.MILESTONE_PAYMENT,
+        },
+        {
+          milestoneId,
+          providerId: userId,
+          status: TransactionStatus.PENDING,
+          type: TransactionType.MILESTONE_PAYMENT,
+        },
+      ],
+      relations: ['client', 'provider', 'milestone'],
     });
   }
 
-  /**
-   * Generate a new Tron wallet
-   */
-  async generateWallet(): Promise<{ address: string; privateKey: string }> {
-    try {
-      const account = await this.tronWeb.createAccount();
-      return {
-        address: account.address.base58,
-        privateKey: account.privateKey,
-      };
-    } catch (error) {
-      this.logger.error('Error generating wallet:', error);
-      throw new BadRequestException('Failed to generate wallet');
-    }
-  }
-
-  /**
-   * Get USDT balance for a wallet address
-   */
-  async getUSDTBalance(address: string): Promise<number> {
-    try {
-      // Set the address we're querying as the default address for read-only contract calls
-      // This is required by TronWeb for contract method calls
-      this.tronWeb.setAddress(address);
-      
-      const contract = await this.tronWeb.contract().at(this.USDT_CONTRACT_ADDRESS);
-      const balance = await contract.balanceOf(address).call();
-      
-      // Convert BigNumber/bigint to number properly
-      // TronWeb returns balance as bigint
-      if (typeof balance === 'bigint') {
-        return Number(balance) / 1000000;
-      } else if (balance && typeof balance.toNumber === 'function') {
-        return balance.toNumber() / 1000000;
-      } else if (balance && typeof balance.dividedBy === 'function') {
-        return balance.dividedBy(1000000).toNumber();
-      } else if (balance && typeof balance.toString === 'function') {
-        // If it's a string representation of a number
-        const numValue = parseFloat(balance.toString());
-        return isNaN(numValue) ? 0 : numValue / 1000000;
-      } else {
-        const numValue = Number(balance);
-        return isNaN(numValue) ? 0 : numValue / 1000000;
-      }
-    } catch (error) {
-      this.logger.error(`Error getting USDT balance for ${address}:`, error);
-      throw new BadRequestException(`Failed to get USDT balance: ${error.message}`);
-    }
-  }
-
-  /**
-   * Transfer USDT from one address to another
-   * @param fromPrivateKey Private key of sender
-   * @param toAddress Recipient address
-   * @param amount Amount in USDT (will be converted to smallest unit)
-   * @returns Transaction hash
-   */
-  async transferUSDT(
-    fromPrivateKey: string,
-    toAddress: string,
-    amount: number,
-  ): Promise<string> {
-    try {
-      // Set the private key for the sender
-      this.tronWeb.setPrivateKey(fromPrivateKey);
-
-      // Get the contract instance
-      const contract = await this.tronWeb.contract().at(this.USDT_CONTRACT_ADDRESS);
-
-      // Convert amount to smallest unit (USDT TRC20 has 6 decimals)
-      // Use string to avoid precision issues
-      const amountInSmallestUnit = this.tronWeb.toBigNumber((amount * 1000000).toString());
-
-      // Transfer
-      const tx = await contract.transfer(toAddress, amountInSmallestUnit).send();
-
-      this.logger.log(`USDT transfer initiated: ${tx}`);
-      return tx;
-    } catch (error) {
-      this.logger.error('Error transferring USDT:', error);
-      throw new BadRequestException(`Failed to transfer USDT: ${error.message}`);
-    }
-  }
-
-  /**
-   * Verify a transaction by hash
-   */
-  async verifyTransaction(txHash: string): Promise<{
-    confirmed: boolean;
-    success: boolean;
-    blockNumber?: number;
-  }> {
-    try {
-      const tx = await this.tronWeb.trx.getTransaction(txHash);
-      
-      if (!tx) {
-        return { confirmed: false, success: false };
-      }
-
-      const txInfo = await this.tronWeb.trx.getTransactionInfo(txHash);
-      
-      if (!txInfo) {
-        return { confirmed: false, success: false };
-      }
-
-      return {
-        confirmed: true,
-        success: txInfo.receipt && txInfo.receipt.result === 'SUCCESS',
-        blockNumber: txInfo.blockNumber,
-      };
-    } catch (error) {
-      this.logger.error(`Error verifying transaction ${txHash}:`, error);
-      return { confirmed: false, success: false };
-    }
-  }
-
-  /**
-   * Check if an address is valid Tron address
-   */
-  isValidAddress(address: string): boolean {
-    return this.tronWeb.isAddress(address);
-  }
-
-  /**
-   * Convert address to hex format
-   */
-  addressToHex(address: string): string {
-    return this.tronWeb.address.toHex(address);
+  async getSuccessfulPaymentByMilestone(milestoneId: string, userId: string): Promise<Transaction | null> {
+    // Find successful payment where user is either the client or the provider
+    return this.transactionRepository.findOne({
+      where: [
+        {
+          milestoneId,
+          clientId: userId,
+          status: TransactionStatus.SUCCESS,
+          type: TransactionType.MILESTONE_PAYMENT,
+        },
+        {
+          milestoneId,
+          providerId: userId,
+          status: TransactionStatus.SUCCESS,
+          type: TransactionType.MILESTONE_PAYMENT,
+        },
+      ],
+      relations: ['client', 'provider', 'milestone'],
+    });
   }
 }
 
