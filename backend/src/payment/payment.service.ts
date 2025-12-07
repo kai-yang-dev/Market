@@ -5,10 +5,12 @@ import { Balance } from '../entities/balance.entity';
 import { Transaction, TransactionType, TransactionStatus } from '../entities/transaction.entity';
 import { User } from '../entities/user.entity';
 import { ChargeDto } from './dto/charge.dto';
+import { InitiateChargeDto } from './dto/initiate-charge.dto';
 import { WithdrawDto } from './dto/withdraw.dto';
 import { ChatGateway } from '../chat/chat.gateway';
 import { Milestone } from '../entities/milestone.entity';
 import { Conversation } from '../entities/conversation.entity';
+import { WalletService } from '../wallet/wallet.service';
 
 @Injectable()
 export class PaymentService {
@@ -26,6 +28,8 @@ export class PaymentService {
     private dataSource: DataSource,
     @Inject(forwardRef(() => ChatGateway))
     private chatGateway: ChatGateway,
+    @Inject(forwardRef(() => WalletService))
+    private walletService: WalletService,
   ) {}
 
   async getBalance(userId: string): Promise<Balance> {
@@ -44,7 +48,89 @@ export class PaymentService {
     return balance;
   }
 
+  async initiateCharge(userId: string, initiateChargeDto: InitiateChargeDto): Promise<{
+    walletAddress: string;
+    amount: number;
+    gasFee: number;
+    platformFee: number;
+    total: number;
+    transactionId: string;
+    expiresAt: Date;
+  }> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Get or create temp wallet
+      const tempWallet = await this.walletService.getOrCreateTempWallet(userId);
+
+      // Calculate fees
+      const platformFee = 1; // $1 USDT fixed
+      const gasFee = await this.walletService.estimateGasFee();
+      const total = Number(initiateChargeDto.amount) + gasFee + platformFee;
+
+      // Set expiration (24 hours from now)
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24);
+
+      // Create pending transaction
+      const transaction = queryRunner.manager.create(Transaction, {
+        clientId: userId,
+        type: TransactionType.CHARGE,
+        status: TransactionStatus.PENDING,
+        amount: initiateChargeDto.amount,
+        expectedAmount: initiateChargeDto.amount,
+        gasFee: gasFee,
+        platformFee: platformFee,
+        tempWalletId: tempWallet.id,
+        expiresAt: expiresAt,
+        description: `Charge ${initiateChargeDto.amount} USDT`,
+      });
+
+      const savedTransaction = await queryRunner.manager.save(transaction);
+
+      await queryRunner.commitTransaction();
+
+      return {
+        walletAddress: tempWallet.address,
+        amount: initiateChargeDto.amount,
+        gasFee: gasFee,
+        platformFee: platformFee,
+        total: total,
+        transactionId: savedTransaction.id,
+        expiresAt: expiresAt,
+      };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async getChargeStatus(transactionId: string, userId: string): Promise<{
+    status: string;
+    transactionHash?: string;
+    confirmedAt?: Date;
+  }> {
+    const transaction = await this.transactionRepository.findOne({
+      where: { id: transactionId, clientId: userId, type: TransactionType.CHARGE },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('Transaction not found');
+    }
+
+    return {
+      status: transaction.status,
+      transactionHash: transaction.transactionHash,
+      confirmedAt: transaction.status === TransactionStatus.SUCCESS ? transaction.updatedAt : undefined,
+    };
+  }
+
   async charge(userId: string, chargeDto: ChargeDto): Promise<Transaction> {
+    // Legacy method - kept for backward compatibility
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -115,40 +201,99 @@ export class PaymentService {
         where: { userId },
       });
 
-      if (!balance || Number(balance.amount) < Number(withdrawDto.amount)) {
+      // Calculate fees
+      const platformFee = 1; // $1 USDT fixed
+      const gasFee = await this.walletService.estimateGasFee();
+      const totalDeduction = Number(withdrawDto.amount) + platformFee;
+
+      if (!balance || Number(balance.amount) < totalDeduction) {
         throw new BadRequestException('Insufficient balance');
       }
 
+      // Get user's temp wallet
+      const tempWallet = await this.walletService.getTempWallet(userId);
+      if (!tempWallet) {
+        throw new BadRequestException('No wallet found. Please charge your account first.');
+      }
+
+      // Check if wallet has enough TRX for gas
+      const trxBalance = await this.walletService.getTRXBalance(tempWallet.address);
+      if (trxBalance < 10) {
+        throw new BadRequestException('Insufficient TRX in wallet for gas. Please ensure wallet has at least 10 TRX.');
+      }
+
       // Create transaction
-      // For withdraw, the user is the client (withdrawing from their own account)
       const transaction = queryRunner.manager.create(Transaction, {
         clientId: userId,
         type: TransactionType.WITHDRAW,
         status: TransactionStatus.PENDING,
         amount: withdrawDto.amount,
+        gasFee: gasFee,
+        platformFee: platformFee,
         walletAddress: withdrawDto.walletAddress,
+        tempWalletId: tempWallet.id,
         description: `Withdraw ${withdrawDto.amount} USDT to ${withdrawDto.walletAddress}`,
       });
 
       const savedTransaction = await queryRunner.manager.save(transaction);
 
-      // Update balance
-      balance.amount = Number(balance.amount) - Number(withdrawDto.amount);
+      // Lock balance (deduct)
+      balance.amount = Number(balance.amount) - totalDeduction;
       await queryRunner.manager.save(balance);
-
-      // Update transaction status to success
-      savedTransaction.status = TransactionStatus.SUCCESS;
-      await queryRunner.manager.save(savedTransaction);
 
       await queryRunner.commitTransaction();
 
-      return savedTransaction;
+      // Execute blockchain transaction
+      try {
+        const privateKey = await this.walletService.getDecryptedPrivateKey(tempWallet);
+        const transactionHash = await this.walletService.sendUSDT(
+          privateKey,
+          withdrawDto.walletAddress,
+          withdrawDto.amount,
+        );
+
+        // Update transaction with hash and success status
+        savedTransaction.transactionHash = transactionHash;
+        savedTransaction.status = TransactionStatus.SUCCESS;
+        await this.transactionRepository.save(savedTransaction);
+
+        return savedTransaction;
+      } catch (error) {
+        // Refund on failure
+        balance.amount = Number(balance.amount) + totalDeduction;
+        await this.balanceRepository.save(balance);
+
+        savedTransaction.status = TransactionStatus.FAILED;
+        await this.transactionRepository.save(savedTransaction);
+
+        throw new BadRequestException(`Withdrawal failed: ${error.message}`);
+      }
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
     } finally {
       await queryRunner.release();
     }
+  }
+
+  async getWithdrawStatus(transactionId: string, userId: string): Promise<{
+    status: string;
+    transactionHash?: string;
+    confirmedAt?: Date;
+  }> {
+    const transaction = await this.transactionRepository.findOne({
+      where: { id: transactionId, clientId: userId, type: TransactionType.WITHDRAW },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('Transaction not found');
+    }
+
+    return {
+      status: transaction.status,
+      transactionHash: transaction.transactionHash,
+      confirmedAt: transaction.status === TransactionStatus.SUCCESS ? transaction.updatedAt : undefined,
+    };
   }
 
   async getTransactions(

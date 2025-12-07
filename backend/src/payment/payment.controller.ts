@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, UseGuards, Request, Query, Param, DefaultValuePipe, ParseIntPipe } from '@nestjs/common';
 import { PaymentService } from './payment.service';
 import { ChargeDto } from './dto/charge.dto';
+import { InitiateChargeDto } from './dto/initiate-charge.dto';
 import { WithdrawDto } from './dto/withdraw.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
@@ -14,6 +15,16 @@ export class PaymentController {
     return this.paymentService.getBalance(req.user.id);
   }
 
+  @Post('charge/initiate')
+  async initiateCharge(@Request() req, @Body() initiateChargeDto: InitiateChargeDto) {
+    return this.paymentService.initiateCharge(req.user.id, initiateChargeDto);
+  }
+
+  @Get('charge/status/:transactionId')
+  async getChargeStatus(@Request() req, @Param('transactionId') transactionId: string) {
+    return this.paymentService.getChargeStatus(transactionId, req.user.id);
+  }
+
   @Post('charge')
   async charge(@Request() req, @Body() chargeDto: ChargeDto) {
     return this.paymentService.charge(req.user.id, chargeDto);
@@ -22,6 +33,11 @@ export class PaymentController {
   @Post('withdraw')
   async withdraw(@Request() req, @Body() withdrawDto: WithdrawDto) {
     return this.paymentService.withdraw(req.user.id, withdrawDto);
+  }
+
+  @Get('withdraw/status/:transactionId')
+  async getWithdrawStatus(@Request() req, @Param('transactionId') transactionId: string) {
+    return this.paymentService.getWithdrawStatus(transactionId, req.user.id);
   }
 
   @Get('transactions')

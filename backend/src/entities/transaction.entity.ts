@@ -2,6 +2,7 @@ import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { BaseEntity } from './base.entity';
 import { User } from './user.entity';
 import { Milestone } from './milestone.entity';
+import { TempWallet } from './temp-wallet.entity';
 
 export enum TransactionType {
   CHARGE = 'charge',
@@ -64,5 +65,24 @@ export class Transaction extends BaseEntity {
 
   @Column({ type: 'text', nullable: true })
   description?: string;
+
+  @Column({ name: 'temp_wallet_id', nullable: true })
+  tempWalletId?: string;
+
+  @ManyToOne(() => TempWallet, { nullable: true })
+  @JoinColumn({ name: 'temp_wallet_id' })
+  tempWallet?: TempWallet;
+
+  @Column({ name: 'expected_amount', type: 'decimal', precision: 10, scale: 2, nullable: true })
+  expectedAmount?: number; // For charge transactions
+
+  @Column({ name: 'gas_fee', type: 'decimal', precision: 10, scale: 2, nullable: true })
+  gasFee?: number;
+
+  @Column({ name: 'platform_fee', type: 'decimal', precision: 10, scale: 2, nullable: true })
+  platformFee?: number;
+
+  @Column({ name: 'expires_at', nullable: true })
+  expiresAt?: Date; // For pending charge transactions
 }
 

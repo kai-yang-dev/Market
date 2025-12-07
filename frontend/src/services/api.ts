@@ -706,6 +706,20 @@ export interface ChargeData {
   transactionHash: string;
 }
 
+export interface InitiateChargeData {
+  amount: number;
+}
+
+export interface ChargeStatusResponse {
+  walletAddress: string;
+  amount: number;
+  gasFee: number;
+  platformFee: number;
+  total: number;
+  transactionId: string;
+  expiresAt: string;
+}
+
 export interface WithdrawData {
   amount: number;
   walletAddress: string;
@@ -717,6 +731,20 @@ export const paymentApi = {
     return response.data;
   },
 
+  initiateCharge: async (data: InitiateChargeData): Promise<ChargeStatusResponse> => {
+    const response = await api.post('/payment/charge/initiate', data);
+    return response.data;
+  },
+
+  getChargeStatus: async (transactionId: string): Promise<{
+    status: string;
+    transactionHash?: string;
+    confirmedAt?: string;
+  }> => {
+    const response = await api.get(`/payment/charge/status/${transactionId}`);
+    return response.data;
+  },
+
   charge: async (data: ChargeData): Promise<Transaction> => {
     const response = await api.post('/payment/charge', data);
     return response.data;
@@ -724,6 +752,15 @@ export const paymentApi = {
 
   withdraw: async (data: WithdrawData): Promise<Transaction> => {
     const response = await api.post('/payment/withdraw', data);
+    return response.data;
+  },
+
+  getWithdrawStatus: async (transactionId: string): Promise<{
+    status: string;
+    transactionHash?: string;
+    confirmedAt?: string;
+  }> => {
+    const response = await api.get(`/payment/withdraw/status/${transactionId}`);
     return response.data;
   },
 
