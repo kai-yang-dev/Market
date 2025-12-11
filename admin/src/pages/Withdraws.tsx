@@ -59,7 +59,7 @@ function Withdraws() {
         <div>
           <div className="font-semibold">Withdrawal accepted!</div>
           <div className="text-sm mt-1">
-            Amount: {result.amount.toFixed(2)} USDT
+            Amount: {Number(result.amount).toFixed(2)} USDT
           </div>
           <div className="text-xs mt-1 break-all">
             TX: {result.transactionHash}
@@ -179,7 +179,7 @@ function Withdraws() {
                           </td>
                           <td className="py-3 px-4 text-right">
                             <span className="text-white font-semibold">
-                              {withdraw.amount.toFixed(2)} USDT
+                              {Number(withdraw.amount).toFixed(2)} USDT
                             </span>
                           </td>
                           <td className="py-3 px-4">
@@ -249,7 +249,7 @@ function Withdraws() {
                           </td>
                           <td className="py-3 px-4 text-right">
                             <span className="text-white font-semibold">
-                              {withdraw.amount.toFixed(2)} USDT
+                              {Number(withdraw.amount).toFixed(2)} USDT
                             </span>
                           </td>
                           <td className="py-3 px-4">

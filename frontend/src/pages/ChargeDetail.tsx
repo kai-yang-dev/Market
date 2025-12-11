@@ -284,15 +284,15 @@ function ChargeDetail() {
           <div className="p-4 rounded-xl bg-[rgba(2,4,8,0.7)] border border-white/10 space-y-2">
             <div className="flex justify-between text-slate-300">
               <span>Amount:</span>
-              <span className="font-semibold">{chargeData.amount.toFixed(2)} USDT</span>
+              <span className="font-semibold">{Number(chargeData.amount).toFixed(2)} USDT</span>
             </div>
             <div className="flex justify-between text-slate-300">
               <span>Platform Fee:</span>
-              <span className="font-semibold">{chargeData.platformFee.toFixed(2)} USDT</span>
+              <span className="font-semibold">{Number(chargeData.platformFee).toFixed(2)} USDT</span>
             </div>
             <div className="pt-2 border-t border-white/10 flex justify-between text-white">
               <span className="font-semibold">Total to Send:</span>
-              <span className="font-bold text-lg">{chargeData.total.toFixed(2)} USDT</span>
+              <span className="font-bold text-lg">{Number(chargeData.total).toFixed(2)} USDT</span>
             </div>
           </div>
 
@@ -320,7 +320,7 @@ function ChargeDetail() {
               <strong>Instructions:</strong>
             </p>
             <ol className="text-sm text-blue-300/80 list-decimal list-inside space-y-1">
-              <li>Send exactly <strong>{chargeData.total.toFixed(2)} USDT</strong> to the wallet address above</li>
+              <li>Send exactly <strong>{Number(chargeData.total).toFixed(2)} USDT</strong> to the wallet address above</li>
               <li>Make sure you're sending USDT on the TRC20 network</li>
               <li>Your balance will be updated automatically once the payment is confirmed</li>
               <li>This page will update automatically when payment is received</li>

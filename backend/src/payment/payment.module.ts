@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PaymentService } from './payment.service';
 import { PaymentController } from './payment.controller';
+import { PaymentMonitorService } from './payment-monitor.service';
 import { Balance } from '../entities/balance.entity';
 import { Transaction } from '../entities/transaction.entity';
 import { User } from '../entities/user.entity';
@@ -18,7 +19,7 @@ import { WalletModule } from '../wallet/wallet.module';
     forwardRef(() => WalletModule),
   ],
   controllers: [PaymentController],
-  providers: [PaymentService],
+  providers: [PaymentService, PaymentMonitorService],
   exports: [PaymentService],
 })
 export class PaymentModule {}

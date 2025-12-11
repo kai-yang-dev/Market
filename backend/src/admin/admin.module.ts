@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { AdminController } from './admin.controller';
@@ -10,6 +10,7 @@ import { Balance } from '../entities/balance.entity';
 import { Transaction } from '../entities/transaction.entity';
 import { WalletService } from '../wallet/wallet.service';
 import { WalletModule } from '../wallet/wallet.module';
+import { PaymentModule } from '../payment/payment.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { WalletModule } from '../wallet/wallet.module';
       signOptions: { expiresIn: '7d' },
     }),
     WalletModule,
+    forwardRef(() => PaymentModule),
   ],
   controllers: [AdminController],
   providers: [AdminService, AdminInitService],

@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -30,16 +32,25 @@ import { WalletModule } from './wallet/wallet.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forRoot({
-      type: 'mysql',
-      host: 'localhost',
-      port: 3306,
-      username: 'root',
-      password: 'Csh104729!',
-      database: 'market',
-      entities: [User, Category, Service, Tag, Conversation, Message, Milestone, Post, PostLike, PostComment, PostCommentLike, Balance, Transaction, TempWallet],
-      synchronize: true, // Set to false in production
-      logging: false,
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
+    ScheduleModule.forRoot(),
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        type: 'mysql',
+        host: configService.get<string>('DB_HOST', 'localhost'),
+        port: configService.get<number>('DB_PORT', 3306),
+        username: configService.get<string>('DB_USERNAME', 'root'),
+        password: configService.get<string>('DB_PASSWORD', 'Csh104729!'),
+        database: configService.get<string>('DB_DATABASE', 'market'),
+        entities: [User, Category, Service, Tag, Conversation, Message, Milestone, Post, PostLike, PostComment, PostCommentLike, Balance, Transaction, TempWallet],
+        synchronize: configService.get<boolean>('DB_SYNCHRONIZE', true), // Set to false in production
+        logging: configService.get<boolean>('DB_LOGGING', false),
+      }),
+      inject: [ConfigService],
     }),
     AuthModule,
     AdminModule,

@@ -27,6 +27,12 @@ function Withdraw() {
       return
     }
 
+    // Validate minimum withdrawal amount (5 USDT)
+    if (Number(amount) < 5) {
+      showToast.error('Minimum withdrawal amount is 5 USDT')
+      return
+    }
+
     // Validate amount doesn't exceed balance
     if (!balance || Number(amount) > Number(balance.amount)) {
       showToast.error(`Insufficient balance. Available: ${Number(balance?.amount || 0).toFixed(2)} USDT`)
@@ -93,12 +99,12 @@ function Withdraw() {
                 type="number"
                 id="amount"
                 step="0.01"
-                min="0.01"
+                min="5"
                 max={balance ? Number(balance.amount) : undefined}
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 className="flex-1 px-4 py-3 rounded-xl bg-[rgba(2,4,8,0.7)] border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                placeholder="0.00"
+                placeholder="5.00"
                 required
               />
               <button
@@ -129,11 +135,13 @@ function Withdraw() {
             </p>
           </div>
 
-
           <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30">
-            <p className="text-sm text-blue-300">
+            <p className="text-sm text-blue-300 mb-2">
               <strong>Note:</strong> Your withdrawal request will be reviewed by admin. 
               Please double-check your wallet address before submitting.
+            </p>
+            <p className="text-xs text-blue-400">
+              Minimum withdrawal amount: 5 USDT
             </p>
           </div>
 

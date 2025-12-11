@@ -19,18 +19,6 @@ export class AdminController {
   }
 
   @UseGuards(AdminGuard)
-  @Get('temp-wallets')
-  async getTempWallets() {
-    return this.adminService.getTempWallets();
-  }
-
-  @UseGuards(AdminGuard)
-  @Post('temp-wallets/:walletId/transfer')
-  async transferFromTempWallet(@Param('walletId') walletId: string) {
-    return this.adminService.transferFromTempWallet(walletId);
-  }
-
-  @UseGuards(AdminGuard)
   @Get('withdraws')
   async getWithdraws() {
     return this.adminService.getWithdraws();
