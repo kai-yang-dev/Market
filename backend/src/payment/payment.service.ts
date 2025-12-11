@@ -14,7 +14,7 @@ import { NotificationType } from '../entities/notification.entity';
 
 @Injectable()
 export class PaymentService {
-  private readonly PLATFORM_FEE = 1; // $1 USDT platform fee
+  private readonly PLATFORM_FEE = 5; // $5 USDT platform fee
   private readonly MIN_WITHDRAW_AMOUNT = 5; // Minimum 5 USDT for withdrawal
 
   constructor(
@@ -561,6 +561,11 @@ export class PaymentService {
 
       await queryRunner.commitTransaction();
 
+      // Get updated balance for WebSocket emission
+      const updatedBalance = await this.balanceRepository.findOne({
+        where: { userId: currentTransaction.clientId },
+      });
+
       // Create notification for successful charge
       await this.notificationService.createNotification(
         currentTransaction.clientId!,
@@ -569,6 +574,19 @@ export class PaymentService {
         `Your balance has been charged with ${Number(currentTransaction.amount).toFixed(2)} USDT`,
         { transactionId: currentTransaction.id, amount: currentTransaction.amount },
       );
+
+      // Emit balance update event via WebSocket
+      if (currentTransaction.clientId && updatedBalance) {
+        this.chatGateway.server.to(`user:${currentTransaction.clientId}`).emit('balance_updated', {
+          balance: {
+            id: updatedBalance.id,
+            userId: updatedBalance.userId,
+            amount: Number(updatedBalance.amount),
+            createdAt: updatedBalance.createdAt.toISOString(),
+            updatedAt: updatedBalance.updatedAt.toISOString(),
+          },
+        });
+      }
 
       return { success: true, message: 'Charge processed successfully' };
     } catch (error) {

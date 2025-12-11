@@ -186,24 +186,41 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Emit to all clients in the conversation room
       this.server.to(`conversation:${data.conversationId}`).emit('new_message', messageWithSender);
 
-      // Create notification for the recipient (not the sender)
+      // Create notification for the recipient (not the sender) only if they're not in the conversation room
       const recipientId = conversation.clientId === userId ? conversation.providerId : conversation.clientId;
       if (recipientId) {
-        const senderName = messageWithSender.sender
-          ? `${messageWithSender.sender.firstName || ''} ${messageWithSender.sender.lastName || ''}`.trim() || messageWithSender.sender.userName || 'Someone'
-          : 'Someone';
-        
-        const messagePreview = data.message.length > 100 
-          ? data.message.substring(0, 100) + '...'
-          : data.message;
+        // Check if recipient is in the conversation room (i.e., currently viewing the chat)
+        let recipientIsInRoom = false;
+        try {
+          // Use fetchSockets to get all sockets in the room
+          const socketsInRoom = await this.server.in(`conversation:${data.conversationId}`).fetchSockets();
+          recipientIsInRoom = socketsInRoom.some((socket) => {
+            return socket.data.userId === recipientId;
+          });
+        } catch (error) {
+          // If we can't check, assume recipient is not in room (safer to send notification)
+          console.error('Error checking if recipient is in room:', error);
+          recipientIsInRoom = false;
+        }
 
-        await this.notificationService.createNotification(
-          recipientId,
-          NotificationType.MESSAGE,
-          `New message from ${senderName}`,
-          messagePreview,
-          { conversationId: data.conversationId, messageId: savedMessage.id },
-        );
+        // Only send notification if recipient is NOT in the conversation room
+        if (!recipientIsInRoom) {
+          const senderName = messageWithSender.sender
+            ? `${messageWithSender.sender.firstName || ''} ${messageWithSender.sender.lastName || ''}`.trim() || messageWithSender.sender.userName || 'Someone'
+            : 'Someone';
+          
+          const messagePreview = data.message.length > 100 
+            ? data.message.substring(0, 100) + '...'
+            : data.message;
+
+          await this.notificationService.createNotification(
+            recipientId,
+            NotificationType.MESSAGE,
+            `New message from ${senderName}`,
+            messagePreview,
+            { conversationId: data.conversationId, messageId: savedMessage.id },
+          );
+        }
       }
     } catch (error) {
       console.error('Error sending message:', error);

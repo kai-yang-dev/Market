@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { paymentApi, Balance } from '../services/api'
 import { showToast } from '../utils/toast'
+import { getSocket } from '../services/socket'
+import { Socket } from 'socket.io-client'
 
 interface ChargeData {
   walletAddress: string
@@ -24,6 +26,7 @@ function ChargeDetail() {
   const [loading, setLoading] = useState(true)
   const intervalRef = useRef<number | null>(null)
   const countdownRef = useRef<number | null>(null)
+  const socketRef = useRef<Socket | null>(null)
 
   useEffect(() => {
     if (!walletAddress) {
@@ -53,6 +56,25 @@ function ChargeDetail() {
       .finally(() => {
         setLoading(false)
       })
+
+    // Set up WebSocket listener for balance updates
+    const socket = getSocket()
+    if (socket) {
+      socketRef.current = socket
+
+      const handleBalanceUpdate = (data: { balance: Balance }) => {
+        // Update balance immediately when received via WebSocket
+        setBalance(data.balance)
+      }
+
+      socket.on('balance_updated', handleBalanceUpdate)
+
+      return () => {
+        if (socketRef.current) {
+          socketRef.current.off('balance_updated', handleBalanceUpdate)
+        }
+      }
+    }
 
     return () => {
       if (intervalRef.current) {
