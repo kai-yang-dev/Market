@@ -200,6 +200,34 @@ function Layout({ children }: LayoutProps) {
           })
         }
       }
+      // Show toast for milestone-related notifications
+      else if (notification.type === 'milestone_created' || notification.type === 'milestone_updated' || notification.type === 'milestone_payment_pending') {
+        const toastContent = (
+          <div 
+            onClick={() => notification.metadata?.conversationId && navigate(`/chat/${notification.metadata.conversationId}`)}
+            className="cursor-pointer hover:opacity-80 transition-opacity"
+          >
+            <div className="font-semibold text-white">{notification.title}</div>
+            <div className="text-sm opacity-90 text-gray-200 mt-1">{notification.message}</div>
+          </div>
+        )
+        
+        const toastType = notification.type === 'milestone_created' ? 'success' : 
+                          notification.type === 'milestone_payment_pending' ? 'info' : 'info'
+        
+        if (toastType === 'success') {
+          showToast.success(toastContent, {
+            onClick: () => notification.metadata?.conversationId && navigate(`/chat/${notification.metadata.conversationId}`),
+            autoClose: 5000,
+          })
+        } else {
+          showToast.info(toastContent, {
+            onClick: () => notification.metadata?.conversationId && navigate(`/chat/${notification.metadata.conversationId}`),
+            autoClose: 5000,
+          })
+        }
+      }
+      // Other notification types can be handled here if needed
     }
 
     socket.on('new_message', handleNewMessage)

@@ -1,7 +1,7 @@
 import { ReactNode } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faSignOutAlt, faHome, faFolder, faBriefcase, faNewspaper, faWallet, faMoneyBillWave, faBullhorn } from '@fortawesome/free-solid-svg-icons'
+import { faSignOutAlt, faHome, faFolder, faBriefcase, faNewspaper, faWallet, faMoneyBillWave, faBullhorn, faGavel } from '@fortawesome/free-solid-svg-icons'
 import { useAppDispatch, useAppSelector } from '../store/hooks'
 import { logout } from '../store/slices/authSlice'
 
@@ -27,6 +27,7 @@ function Layout({ children }: LayoutProps) {
     { path: '/blog', label: 'Blog', icon: faNewspaper },
     { path: '/temp-wallets', label: 'Temp Wallets', icon: faWallet },
     { path: '/withdraws', label: 'Withdraws', icon: faMoneyBillWave },
+    { path: '/disputes', label: 'Disputes', icon: faGavel },
     { path: '/broadcast', label: 'Broadcast', icon: faBullhorn },
   ]
 

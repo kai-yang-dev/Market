@@ -22,13 +22,15 @@ export class MilestoneController {
   @Get('conversation/:conversationId')
   @UseGuards(JwtAuthGuard)
   async findAll(@Param('conversationId') conversationId: string, @Request() req) {
-    return this.milestoneService.findAll(conversationId, req.user.id);
+    const isAdmin = req.user.role === 'admin';
+    return this.milestoneService.findAll(conversationId, req.user.id, isAdmin);
   }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   async findOne(@Param('id') id: string, @Request() req) {
-    return this.milestoneService.findOne(id, req.user.id);
+    const isAdmin = req.user.role === 'admin';
+    return this.milestoneService.findOne(id, req.user.id, isAdmin);
   }
 
   @Patch(':id/status')
@@ -38,44 +40,51 @@ export class MilestoneController {
     @Request() req,
     @Body() updateStatusDto: UpdateMilestoneStatusDto,
   ) {
-    return this.milestoneService.updateStatus(id, req.user.id, updateStatusDto);
+    const isAdmin = req.user.role === 'admin';
+    return this.milestoneService.updateStatus(id, req.user.id, updateStatusDto, isAdmin);
   }
 
   // Convenience endpoints for specific status changes
   @Patch(':id/accept')
   @UseGuards(JwtAuthGuard)
   async accept(@Param('id') id: string, @Request() req) {
-    return this.milestoneService.updateStatus(id, req.user.id, { status: MilestoneStatus.PROCESSING });
+    const isAdmin = req.user.role === 'admin';
+    return this.milestoneService.updateStatus(id, req.user.id, { status: MilestoneStatus.PROCESSING }, isAdmin);
   }
 
   @Patch(':id/cancel')
   @UseGuards(JwtAuthGuard)
   async cancel(@Param('id') id: string, @Request() req) {
-    return this.milestoneService.updateStatus(id, req.user.id, { status: MilestoneStatus.CANCELED });
+    const isAdmin = req.user.role === 'admin';
+    return this.milestoneService.updateStatus(id, req.user.id, { status: MilestoneStatus.CANCELED }, isAdmin);
   }
 
   @Patch(':id/complete')
   @UseGuards(JwtAuthGuard)
   async complete(@Param('id') id: string, @Request() req) {
-    return this.milestoneService.updateStatus(id, req.user.id, { status: MilestoneStatus.COMPLETED });
+    const isAdmin = req.user.role === 'admin';
+    return this.milestoneService.updateStatus(id, req.user.id, { status: MilestoneStatus.COMPLETED }, isAdmin);
   }
 
   @Patch(':id/withdraw')
   @UseGuards(JwtAuthGuard)
   async withdraw(@Param('id') id: string, @Request() req) {
-    return this.milestoneService.updateStatus(id, req.user.id, { status: MilestoneStatus.WITHDRAW });
+    const isAdmin = req.user.role === 'admin';
+    return this.milestoneService.updateStatus(id, req.user.id, { status: MilestoneStatus.WITHDRAW }, isAdmin);
   }
 
   @Patch(':id/release')
   @UseGuards(JwtAuthGuard)
   async release(@Param('id') id: string, @Request() req) {
-    return this.milestoneService.updateStatus(id, req.user.id, { status: MilestoneStatus.RELEASED });
+    const isAdmin = req.user.role === 'admin';
+    return this.milestoneService.updateStatus(id, req.user.id, { status: MilestoneStatus.RELEASED }, isAdmin);
   }
 
   @Patch(':id/dispute')
   @UseGuards(JwtAuthGuard)
   async dispute(@Param('id') id: string, @Request() req) {
-    return this.milestoneService.updateStatus(id, req.user.id, { status: MilestoneStatus.DISPUTE });
+    const isAdmin = req.user.role === 'admin';
+    return this.milestoneService.updateStatus(id, req.user.id, { status: MilestoneStatus.DISPUTE }, isAdmin);
   }
 }
 

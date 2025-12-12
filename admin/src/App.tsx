@@ -11,6 +11,8 @@ import Blog from './pages/Blog'
 import TempWallets from './pages/TempWallets'
 import Withdraws from './pages/Withdraws'
 import BroadcastNotification from './pages/BroadcastNotification'
+import Disputes from './pages/Disputes'
+import Chat from './pages/Chat'
 import SignIn from './pages/SignIn'
 import Layout from './components/Layout'
 
@@ -101,6 +103,20 @@ function App() {
           <PrivateRoute>
             <Layout>
               <BroadcastNotification />
+            </Layout>
+          </PrivateRoute>
+        } />
+        <Route path="/disputes" element={
+          <PrivateRoute>
+            <Layout>
+              <Disputes />
+            </Layout>
+          </PrivateRoute>
+        } />
+        <Route path="/chat/:id" element={
+          <PrivateRoute>
+            <Layout>
+              <Chat />
             </Layout>
           </PrivateRoute>
         } />

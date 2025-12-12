@@ -15,6 +15,9 @@ import { Transaction, TransactionType, TransactionStatus } from '../entities/tra
 import { AdminSignInDto } from './dto/admin-signin.dto';
 import { PaymentService } from '../payment/payment.service';
 import { NotificationService } from '../notification/notification.service';
+import { ConversationService } from '../conversation/conversation.service';
+import { MilestoneService } from '../milestone/milestone.service';
+import { MilestoneStatus } from '../entities/milestone.entity';
 
 @Injectable()
 export class AdminService {
@@ -29,6 +32,10 @@ export class AdminService {
     private paymentService: PaymentService,
     @Inject(forwardRef(() => NotificationService))
     private notificationService: NotificationService,
+    @Inject(forwardRef(() => ConversationService))
+    private conversationService: ConversationService,
+    @Inject(forwardRef(() => MilestoneService))
+    private milestoneService: MilestoneService,
   ) {}
 
   async signIn(dto: AdminSignInDto) {
@@ -107,6 +114,34 @@ export class AdminService {
 
   async broadcastNotification(title: string, message: string, metadata?: Record<string, any>) {
     return this.notificationService.broadcastNotification(title, message, metadata);
+  }
+
+  async getDisputes() {
+    return this.conversationService.findDisputed();
+  }
+
+  async releaseMilestone(milestoneId: string, amount: number) {
+    if (amount <= 0) {
+      throw new BadRequestException('Amount must be greater than 0');
+    }
+
+    // Get the milestone
+    const milestone = await this.milestoneService.findOne(milestoneId);
+    
+    if (!milestone) {
+      throw new NotFoundException('Milestone not found');
+    }
+
+    if (milestone.status !== MilestoneStatus.DISPUTE) {
+      throw new BadRequestException('Milestone is not in dispute status');
+    }
+
+    // Release milestone with custom amount using payment service
+    return this.paymentService.releaseMilestoneTransactionWithAmount(
+      milestoneId,
+      milestone.providerId,
+      amount,
+    );
   }
 }
 

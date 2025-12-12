@@ -36,5 +36,17 @@ export class AdminController {
   async broadcastNotification(@Body() dto: CreateNotificationDto) {
     return this.adminService.broadcastNotification(dto.title, dto.message, dto.metadata);
   }
+
+  @UseGuards(AdminGuard)
+  @Get('disputes')
+  async getDisputes() {
+    return this.adminService.getDisputes();
+  }
+
+  @UseGuards(AdminGuard)
+  @Post('milestones/:id/release')
+  async releaseMilestone(@Param('id') id: string, @Body() body: { amount: number }) {
+    return this.adminService.releaseMilestone(id, body.amount);
+  }
 }
 

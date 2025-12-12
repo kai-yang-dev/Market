@@ -12,6 +12,8 @@ import { WalletService } from '../wallet/wallet.service';
 import { WalletModule } from '../wallet/wallet.module';
 import { PaymentModule } from '../payment/payment.module';
 import { NotificationModule } from '../notification/notification.module';
+import { ConversationModule } from '../conversation/conversation.module';
+import { MilestoneModule } from '../milestone/milestone.module';
 
 @Module({
   imports: [
@@ -23,6 +25,8 @@ import { NotificationModule } from '../notification/notification.module';
     WalletModule,
     forwardRef(() => PaymentModule),
     forwardRef(() => NotificationModule),
+    forwardRef(() => ConversationModule),
+    forwardRef(() => MilestoneModule),
   ],
   controllers: [AdminController],
   providers: [AdminService, AdminInitService],

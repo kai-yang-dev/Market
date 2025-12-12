@@ -102,6 +102,33 @@ function Chat() {
       fetchMilestones()
     }
 
+    // Listen for payment pending events
+    const handlePaymentPending = (data: { transaction: Transaction; milestoneId: string; conversationId: string }) => {
+      if (data.conversationId === id) {
+        // Add to pending payments
+        setPendingPayments((prev) => {
+          const newMap = new Map(prev)
+          newMap.set(data.milestoneId, data.transaction)
+          return newMap
+        })
+        
+        // Remove from successful payments if it was there
+        setSuccessfulPayments((prev) => {
+          const newMap = new Map(prev)
+          newMap.delete(data.milestoneId)
+          return newMap
+        })
+        
+        // Refresh milestones
+        fetchMilestones()
+        
+        // Scroll to show the payment card
+        setTimeout(() => {
+          scrollToBottom()
+        }, 300)
+      }
+    }
+
     // Listen for payment accepted events
     const handlePaymentAccepted = (data: { transaction: Transaction; milestoneId: string; conversationId: string }) => {
       if (data.conversationId === id) {
@@ -189,6 +216,7 @@ function Chat() {
 
     socket.on('new_message', handleNewMessage)
     socket.on('milestone_updated', handleMilestoneUpdate)
+    socket.on('payment_pending', handlePaymentPending)
     socket.on('payment_accepted', handlePaymentAccepted)
     socket.on('user_typing', handleTyping)
     socket.on('user_stopped_typing', handleStopTyping)
@@ -207,6 +235,7 @@ function Chat() {
       if (socket) {
         socket.off('new_message', handleNewMessage)
         socket.off('milestone_updated', handleMilestoneUpdate)
+        socket.off('payment_pending', handlePaymentPending)
         socket.off('payment_accepted', handlePaymentAccepted)
         socket.off('user_typing', handleTyping)
         socket.off('user_stopped_typing', handleStopTyping)
@@ -1218,16 +1247,7 @@ function Chat() {
                               </button>
                             </>
                           )}
-                          {isClient && (
-                            <button
-                              onClick={() => handleMilestoneAction(milestone.id, 'cancel')}
-                              disabled={updatingMilestone === milestone.id}
-                              className="flex-1 bg-red-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
-                            >
-                              <FontAwesomeIcon icon={faBan} className="text-xs" />
-                              Cancel
-                            </button>
-                          )}
+                          {/* Client cannot cancel after provider has accepted (status is PROCESSING) */}
                         </>
                       )}
                       {milestone.status === 'completed' && (
@@ -1266,16 +1286,7 @@ function Chat() {
                       )}
                       {milestone.status === 'released' && (
                         <>
-                          {isClient && (
-                            <button
-                              onClick={() => handleMilestoneAction(milestone.id, 'dispute')}
-                              disabled={updatingMilestone === milestone.id}
-                              className="flex-1 bg-yellow-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-yellow-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
-                            >
-                              <FontAwesomeIcon icon={faGavel} className="text-xs" />
-                              Dispute
-                            </button>
-                          )}
+                          {/* Only provider can dispute after milestone is released */}
                           {!isClient && (
                             <button
                               onClick={() => handleMilestoneAction(milestone.id, 'dispute')}

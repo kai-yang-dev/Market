@@ -174,18 +174,22 @@ export class ConversationService {
     return conversationsWithMessages;
   }
 
-  async findDisputed(): Promise<Conversation[]> {
+  async findDisputed(): Promise<Array<Conversation & { disputedMilestones: any[] }>> {
     // Find all milestones with dispute status
     const disputedMilestones = await this.milestoneRepository.find({
       where: { status: MilestoneStatus.DISPUTE, deletedAt: null },
+      relations: ['client', 'provider', 'service'],
+      order: { createdAt: 'DESC' },
     });
 
     if (disputedMilestones.length === 0) {
       return [];
     }
 
-    // Get unique conversation IDs from disputed milestones
+    // Group milestones by conversation
+    const conversationMap = new Map<string, any[]>();
     const conversationIds = new Set<string>();
+
     for (const milestone of disputedMilestones) {
       // Find conversation by service, client, and provider
       const conversation = await this.conversationRepository.findOne({
@@ -198,6 +202,10 @@ export class ConversationService {
       });
       if (conversation) {
         conversationIds.add(conversation.id);
+        if (!conversationMap.has(conversation.id)) {
+          conversationMap.set(conversation.id, []);
+        }
+        conversationMap.get(conversation.id)!.push(milestone);
       }
     }
 
@@ -217,7 +225,11 @@ export class ConversationService {
       .orderBy('conversation.updatedAt', 'DESC')
       .getMany();
 
-    return conversations;
+    // Attach disputed milestones to each conversation
+    return conversations.map(conv => ({
+      ...conv,
+      disputedMilestones: conversationMap.get(conv.id) || [],
+    }));
   }
 }
 

@@ -11,6 +11,9 @@ export enum NotificationType {
   SERVICE_APPROVED = 'service_approved',
   SERVICE_BLOCKED = 'service_blocked',
   SERVICE_UNBLOCKED = 'service_unblocked',
+  MILESTONE_CREATED = 'milestone_created',
+  MILESTONE_UPDATED = 'milestone_updated',
+  MILESTONE_PAYMENT_PENDING = 'milestone_payment_pending',
 }
 
 @Entity('notifications')

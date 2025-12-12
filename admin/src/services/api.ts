@@ -94,6 +94,16 @@ export const adminApi = {
     const response = await api.post(`/admin/withdraws/${withdrawId}/accept`);
     return response.data;
   },
+
+  getDisputes: async () => {
+    const response = await api.get('/admin/disputes');
+    return response.data;
+  },
+
+  releaseMilestone: async (milestoneId: string, amount: number) => {
+    const response = await api.post(`/admin/milestones/${milestoneId}/release`, { amount });
+    return response.data;
+  },
 };
 
 export const categoryApi = {
@@ -242,7 +252,7 @@ export const blogApi = {
 export interface Notification {
   id: string;
   userId?: string;
-  type: 'broadcast' | 'payment_charge' | 'payment_withdraw' | 'payment_transfer' | 'message' | 'service_approved' | 'service_blocked' | 'service_unblocked';
+  type: 'broadcast' | 'payment_charge' | 'payment_withdraw' | 'payment_transfer' | 'message' | 'service_approved' | 'service_blocked' | 'service_unblocked' | 'milestone_created' | 'milestone_updated' | 'milestone_payment_pending';
   title: string;
   message: string;
   readAt?: string;
@@ -298,6 +308,85 @@ export const notificationApi = {
     return response.data;
   },
 };
+
+export interface Conversation {
+  id: string
+  clientId: string
+  providerId: string
+  serviceId: string
+  client?: {
+    id: string
+    firstName?: string
+    lastName?: string
+    userName?: string
+    email?: string
+  }
+  provider?: {
+    id: string
+    firstName?: string
+    lastName?: string
+    userName?: string
+    email?: string
+  }
+  service?: {
+    id: string
+    title: string
+  }
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Message {
+  id: string
+  conversationId: string
+  senderId: string
+  message: string
+  sender?: {
+    id: string
+    firstName?: string
+    lastName?: string
+    userName?: string
+  }
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Milestone {
+  id: string
+  title: string
+  description: string
+  balance: number
+  status: string
+  clientId: string
+  providerId: string
+  createdAt: string
+  updatedAt: string
+}
+
+export const conversationApi = {
+  getById: async (id: string): Promise<Conversation> => {
+    const response = await api.get(`/conversations/${id}`)
+    return response.data
+  },
+}
+
+export const messageApi = {
+  getByConversation: async (conversationId: string): Promise<Message[]> => {
+    const response = await api.get(`/messages/conversation/${conversationId}`)
+    return response.data
+  },
+  create: async (conversationId: string, message: string): Promise<Message> => {
+    const response = await api.post(`/messages/conversation/${conversationId}`, { message })
+    return response.data
+  },
+}
+
+export const milestoneApi = {
+  getByConversation: async (conversationId: string): Promise<Milestone[]> => {
+    const response = await api.get(`/milestones/conversation/${conversationId}`)
+    return response.data
+  },
+}
 
 export default api;
 

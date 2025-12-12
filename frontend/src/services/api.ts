@@ -680,7 +680,7 @@ export interface Transaction {
   providerId?: string;
   milestoneId?: string;
   type: 'charge' | 'withdraw' | 'milestone_payment';
-  status: 'draft' | 'pending' | 'success' | 'failed' | 'cancelled';
+  status: 'draft' | 'pending' | 'success' | 'failed' | 'cancelled' | 'withdraw';
   amount: number;
   transactionHash?: string;
   walletAddress?: string;
@@ -805,7 +805,7 @@ export const paymentApi = {
 export interface Notification {
   id: string;
   userId?: string;
-  type: 'broadcast' | 'payment_charge' | 'payment_withdraw' | 'payment_transfer' | 'message' | 'service_approved' | 'service_blocked' | 'service_unblocked';
+  type: 'broadcast' | 'payment_charge' | 'payment_withdraw' | 'payment_transfer' | 'message' | 'service_approved' | 'service_blocked' | 'service_unblocked' | 'milestone_created' | 'milestone_updated' | 'milestone_payment_pending';
   title: string;
   message: string;
   readAt?: string;
