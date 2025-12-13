@@ -32,8 +32,6 @@ function SignUp() {
 
   // Step 5: Address
   const [step5Data, setStep5Data] = useState({
-    street: '',
-    city: '',
     country: '',
   });
 
@@ -351,35 +349,7 @@ function SignUp() {
       case 5:
         return (
           <form onSubmit={handleStep5} className="space-y-4">
-            <h2 className="text-2xl font-bold text-gray-100 mb-2">Step 5: Address</h2>
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">
-                Street *
-              </label>
-              <input
-                type="text"
-                required
-                className="w-full px-4 py-3 border border-gray-600 bg-gray-700 text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                value={step5Data.street}
-                onChange={(e) =>
-                  setStep5Data({ ...step5Data, street: e.target.value })
-                }
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">
-                City *
-              </label>
-              <input
-                type="text"
-                required
-                className="w-full px-4 py-3 border border-gray-600 bg-gray-700 text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                value={step5Data.city}
-                onChange={(e) =>
-                  setStep5Data({ ...step5Data, city: e.target.value })
-                }
-              />
-            </div>
+            <h2 className="text-2xl font-bold text-gray-100 mb-2">Step 5: Country</h2>
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-2">
                 Country *
@@ -498,7 +468,7 @@ function SignUp() {
                 required
                 pattern="[0-9]{6}"
                 maxLength={6}
-                className="w-full px-4 py-3 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-center text-2xl tracking-widest"
+                className="w-full px-4 py-3 border border-gray-600 bg-gray-700 text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-center text-2xl tracking-widest"
                 placeholder="000000"
                 value={step7Data.verificationCode}
                 onChange={(e) =>
