@@ -71,8 +71,6 @@ export interface SignUpStep4Data {
 }
 
 export interface SignUpStep5Data {
-  street: string;
-  city: string;
   country: string;
 }
 

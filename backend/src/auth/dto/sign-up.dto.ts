@@ -34,14 +34,6 @@ export class SignUpStep4Dto {
 export class SignUpStep5Dto {
   @IsString()
   @MinLength(1)
-  street: string;
-
-  @IsString()
-  @MinLength(1)
-  city: string;
-
-  @IsString()
-  @MinLength(1)
   country: string;
 }
 

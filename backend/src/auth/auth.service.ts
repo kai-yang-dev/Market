@@ -159,7 +159,7 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
-    const address = `${dto.street}, ${dto.city}, ${dto.country}`;
+    const address = `${dto.country}`;
     user.address = address;
 
     await this.userRepository.save(user);
