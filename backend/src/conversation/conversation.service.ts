@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, ConflictException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Conversation } from '../entities/conversation.entity';
@@ -7,6 +7,9 @@ import { Message } from '../entities/message.entity';
 import { Milestone } from '../entities/milestone.entity';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { MilestoneStatus } from '../entities/milestone.entity';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationType } from '../entities/notification.entity';
+import { User } from '../entities/user.entity';
 
 @Injectable()
 export class ConversationService {
@@ -19,6 +22,10 @@ export class ConversationService {
     private messageRepository: Repository<Message>,
     @InjectRepository(Milestone)
     private milestoneRepository: Repository<Milestone>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+    @Inject(forwardRef(() => NotificationService))
+    private notificationService: NotificationService,
   ) {}
 
   async create(userId: string, createConversationDto: CreateConversationDto): Promise<Conversation> {
@@ -67,6 +74,21 @@ export class ConversationService {
     });
 
     await this.messageRepository.save(firstMessage);
+
+    // Get client info for notification
+    const client = await this.userRepository.findOne({ where: { id: userId } });
+    const clientName = client
+      ? `${client.firstName || ''} ${client.lastName || ''}`.trim() || client.userName || 'A client'
+      : 'A client';
+
+    // Create notification for provider about new connection
+    await this.notificationService.createNotification(
+      service.userId,
+      NotificationType.MESSAGE,
+      'New Connection Request',
+      `${clientName} wants to connect with you about "${service.title}"`,
+      { conversationId: savedConversation.id, serviceId: service.id, clientId: userId },
+    );
 
     return this.findOne(savedConversation.id);
   }
@@ -152,18 +174,22 @@ export class ConversationService {
     return conversationsWithMessages;
   }
 
-  async findDisputed(): Promise<Conversation[]> {
+  async findDisputed(): Promise<Array<Conversation & { disputedMilestones: any[] }>> {
     // Find all milestones with dispute status
     const disputedMilestones = await this.milestoneRepository.find({
       where: { status: MilestoneStatus.DISPUTE, deletedAt: null },
+      relations: ['client', 'provider', 'service'],
+      order: { createdAt: 'DESC' },
     });
 
     if (disputedMilestones.length === 0) {
       return [];
     }
 
-    // Get unique conversation IDs from disputed milestones
+    // Group milestones by conversation
+    const conversationMap = new Map<string, any[]>();
     const conversationIds = new Set<string>();
+
     for (const milestone of disputedMilestones) {
       // Find conversation by service, client, and provider
       const conversation = await this.conversationRepository.findOne({
@@ -176,6 +202,10 @@ export class ConversationService {
       });
       if (conversation) {
         conversationIds.add(conversation.id);
+        if (!conversationMap.has(conversation.id)) {
+          conversationMap.set(conversation.id, []);
+        }
+        conversationMap.get(conversation.id)!.push(milestone);
       }
     }
 
@@ -195,7 +225,11 @@ export class ConversationService {
       .orderBy('conversation.updatedAt', 'DESC')
       .getMany();
 
-    return conversations;
+    // Attach disputed milestones to each conversation
+    return conversations.map(conv => ({
+      ...conv,
+      disputedMilestones: conversationMap.get(conv.id) || [],
+    }));
   }
 }
 

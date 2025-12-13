@@ -49,7 +49,7 @@ This document outlines comprehensive ideas for implementing a USDT TRC20 token-b
    - Show breakdown:
      - Amount to send: `X USDT`
      - Gas fee estimate: `~Y TRX` (converted to USDT)
-     - Platform fee: `$1 USDT`
+     - Platform fee: `$5 USDT`
      - Total required: `X + Y + 1 USDT`
    - Show transaction status: "Waiting for payment..."
    - Create transaction record with status: `PENDING`
@@ -155,7 +155,7 @@ async monitorWallet(walletAddress: string, expectedAmount: number) {
 
 2. **Fee Calculation**
    - Gas fee: ~10-20 TRX (varies with network)
-   - Platform fee: $1 USDT (fixed)
+   - Platform fee: $5 USDT (fixed)
    - Total deduction: `amount + gas_fee + platform_fee`
    - Display breakdown to user
 
@@ -195,7 +195,7 @@ async executeWithdraw(
   const tempWallet = await this.getTempWallet(userId);
   
   // Calculate fees
-  const platformFee = 1; // $1 USDT
+  const platformFee = 5; // $1 USDT
   const gasFee = await this.estimateGasFee();
   const totalDeduction = amount + platformFee;
   
@@ -435,7 +435,7 @@ export class GasFeeService {
     - Amount breakdown:
       * Amount: X USDT
       * Gas Fee: ~Y USDT
-      * Platform Fee: $1 USDT
+      * Platform Fee: $5 USDT
       * Total: X + Y + 1 USDT
     - Transaction Status (real-time updates)
     - Countdown timer (if expires in 24h)

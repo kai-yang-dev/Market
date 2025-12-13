@@ -6,9 +6,10 @@ import { useAppSelector, useAppDispatch } from '../store/hooks'
 import { logout } from '../store/slices/authSlice'
 import { showToast } from '../utils/toast'
 import { getSocket } from '../services/socket'
-import { Message, paymentApi, Balance } from '../services/api'
+import { Message, paymentApi, Balance, Notification } from '../services/api'
 import { Socket } from 'socket.io-client'
 import Footer from './Footer'
+import NotificationDropdown from './NotificationDropdown'
 
 interface LayoutProps {
   children: ReactNode
@@ -105,7 +106,7 @@ function Layout({ children }: LayoutProps) {
     }
   }, [mobileMenuOpen])
 
-  // Set up global socket listener for incoming messages
+  // Set up global socket listener for incoming messages and balance updates
   useEffect(() => {
     if (!isAuthenticated || !user) {
       return
@@ -152,11 +153,92 @@ function Layout({ children }: LayoutProps) {
       }
     }
 
+    const handleBalanceUpdate = (data: { balance: Balance }) => {
+      // Update balance immediately when received via WebSocket
+      setBalance(data.balance)
+    }
+
+    const handleNewNotification = (notification: Notification) => {
+      // Check if user is on the chat page
+      const isOnChatPage = location.pathname.startsWith('/chat/')
+      const currentChatId = location.pathname.split('/chat/')[1]
+      const notificationChatId = notification.metadata?.conversationId
+
+      // Show toast for connection requests (always show these)
+      if (notification.type === 'message' && notification.title === 'New Connection Request') {
+        const toastContent = (
+          <div 
+            onClick={() => notification.metadata?.conversationId && navigate(`/chat/${notification.metadata.conversationId}`)}
+            className="cursor-pointer hover:opacity-80 transition-opacity"
+          >
+            <div className="font-semibold text-white">{notification.title}</div>
+            <div className="text-sm opacity-90 text-gray-200 mt-1">{notification.message}</div>
+          </div>
+        )
+        
+        showToast.info(toastContent, {
+          onClick: () => notification.metadata?.conversationId && navigate(`/chat/${notification.metadata.conversationId}`),
+          autoClose: 5000,
+        })
+      }
+      // Show toast for regular messages only if user is NOT on the chat page or on a different conversation
+      else if (notification.type === 'message' && notification.title.startsWith('New message from')) {
+        if (!isOnChatPage || (isOnChatPage && notificationChatId !== currentChatId)) {
+          const toastContent = (
+            <div 
+              onClick={() => notification.metadata?.conversationId && navigate(`/chat/${notification.metadata.conversationId}`)}
+              className="cursor-pointer hover:opacity-80 transition-opacity"
+            >
+              <div className="font-semibold text-white">{notification.title}</div>
+              <div className="text-sm opacity-90 text-gray-200 mt-1">{notification.message}</div>
+            </div>
+          )
+          
+          showToast.info(toastContent, {
+            onClick: () => notification.metadata?.conversationId && navigate(`/chat/${notification.metadata.conversationId}`),
+            autoClose: 5000,
+          })
+        }
+      }
+      // Show toast for milestone-related notifications
+      else if (notification.type === 'milestone_created' || notification.type === 'milestone_updated' || notification.type === 'milestone_payment_pending') {
+        const toastContent = (
+          <div 
+            onClick={() => notification.metadata?.conversationId && navigate(`/chat/${notification.metadata.conversationId}`)}
+            className="cursor-pointer hover:opacity-80 transition-opacity"
+          >
+            <div className="font-semibold text-white">{notification.title}</div>
+            <div className="text-sm opacity-90 text-gray-200 mt-1">{notification.message}</div>
+          </div>
+        )
+        
+        const toastType = notification.type === 'milestone_created' ? 'success' : 
+                          notification.type === 'milestone_payment_pending' ? 'info' : 'info'
+        
+        if (toastType === 'success') {
+          showToast.success(toastContent, {
+            onClick: () => notification.metadata?.conversationId && navigate(`/chat/${notification.metadata.conversationId}`),
+            autoClose: 5000,
+          })
+        } else {
+          showToast.info(toastContent, {
+            onClick: () => notification.metadata?.conversationId && navigate(`/chat/${notification.metadata.conversationId}`),
+            autoClose: 5000,
+          })
+        }
+      }
+      // Other notification types can be handled here if needed
+    }
+
     socket.on('new_message', handleNewMessage)
+    socket.on('balance_updated', handleBalanceUpdate)
+    socket.on('new_notification', handleNewNotification)
 
     return () => {
       if (socketRef.current) {
         socketRef.current.off('new_message', handleNewMessage)
+        socketRef.current.off('balance_updated', handleBalanceUpdate)
+        socketRef.current.off('new_notification', handleNewNotification)
       }
     }
   }, [isAuthenticated, user, location.pathname, navigate])
@@ -232,6 +314,8 @@ function Layout({ children }: LayoutProps) {
               <div className="flex items-center gap-4">
                 {isAuthenticated && user ? (
                   <>
+                    {/* Notifications */}
+                    <NotificationDropdown userId={user.id} />
                     {/* Balance Dropdown */}
                     <div className="hidden md:block relative" ref={balanceDropdownRef}>
                       <button

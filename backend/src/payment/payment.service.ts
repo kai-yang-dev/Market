@@ -5,14 +5,16 @@ import { Balance } from '../entities/balance.entity';
 import { Transaction, TransactionType, TransactionStatus } from '../entities/transaction.entity';
 import { User } from '../entities/user.entity';
 import { ChatGateway } from '../chat/chat.gateway';
-import { Milestone } from '../entities/milestone.entity';
+import { Milestone, MilestoneStatus } from '../entities/milestone.entity';
 import { Conversation } from '../entities/conversation.entity';
 import { WalletService } from '../wallet/wallet.service';
 import { TempWallet } from '../entities/temp-wallet.entity';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationType } from '../entities/notification.entity';
 
 @Injectable()
 export class PaymentService {
-  private readonly PLATFORM_FEE = 1; // $1 USDT platform fee
+  private readonly PLATFORM_FEE = 5; // $5 USDT platform fee
   private readonly MIN_WITHDRAW_AMOUNT = 5; // Minimum 5 USDT for withdrawal
 
   constructor(
@@ -31,6 +33,8 @@ export class PaymentService {
     private chatGateway: ChatGateway,
     @Inject(forwardRef(() => WalletService))
     private walletService: WalletService,
+    @Inject(forwardRef(() => NotificationService))
+    private notificationService: NotificationService,
   ) { }
 
   async getBalance(userId: string): Promise<Balance> {
@@ -118,6 +122,31 @@ export class PaymentService {
 
       await queryRunner.commitTransaction();
 
+      // Get milestone info for notification (after transaction commit)
+      const milestone = await this.milestoneRepository.findOne({
+        where: { id: milestoneId },
+      });
+
+      if (milestone) {
+        // Send notification to provider about pending payment
+        await this.notificationService.createNotification(
+          providerId,
+          NotificationType.MILESTONE_PAYMENT_PENDING,
+          'Payment Pending',
+          `A payment of ${Number(amount).toFixed(2)} USDT is pending for milestone "${milestone.title}". Release the milestone to accept payment.`,
+          { transactionId: savedTransaction.id, milestoneId, amount },
+        );
+
+        // Send notification to client confirming payment creation
+        await this.notificationService.createNotification(
+          clientId,
+          NotificationType.MILESTONE_PAYMENT_PENDING,
+          'Payment Created',
+          `You created a payment of ${Number(amount).toFixed(2)} USDT for milestone "${milestone.title}". Waiting for provider to release.`,
+          { transactionId: savedTransaction.id, milestoneId, amount },
+        );
+      }
+
       return savedTransaction;
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -161,6 +190,212 @@ export class PaymentService {
       await queryRunner.manager.save(transaction);
 
       await queryRunner.commitTransaction();
+
+      // Get milestone info for notification
+      const milestone = await this.milestoneRepository.findOne({
+        where: { id: milestoneId },
+      });
+
+      if (milestone) {
+        // Send notification to provider about payment awaiting acceptance
+        await this.notificationService.createNotification(
+          providerId,
+          NotificationType.MILESTONE_PAYMENT_PENDING,
+          'Payment Awaiting Acceptance',
+          `A payment of ${Number(transaction.amount).toFixed(2)} USDT for milestone "${milestone.title}" is awaiting your acceptance.`,
+          { transactionId: transaction.id, milestoneId, amount: transaction.amount },
+        );
+
+        // Send notification to client about payment release
+        await this.notificationService.createNotification(
+          milestone.clientId,
+          NotificationType.MILESTONE_UPDATED,
+          'Payment Released',
+          `Payment of ${Number(transaction.amount).toFixed(2)} USDT for milestone "${milestone.title}" has been released and is awaiting provider acceptance.`,
+          { transactionId: transaction.id, milestoneId, amount: transaction.amount },
+        );
+      }
+
+      return transaction;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Release milestone transaction with custom amount (admin only)
+   */
+  async releaseMilestoneTransactionWithAmount(
+    milestoneId: string,
+    providerId: string,
+    amount: number,
+  ): Promise<Transaction> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Get milestone
+      const milestone = await this.milestoneRepository.findOne({
+        where: { id: milestoneId },
+      });
+
+      if (!milestone) {
+        throw new NotFoundException('Milestone not found');
+      }
+
+      // Find existing transaction
+      let transaction = await queryRunner.manager.findOne(Transaction, {
+        where: { milestoneId, type: TransactionType.MILESTONE_PAYMENT },
+      });
+
+      if (transaction) {
+        // Update existing transaction with new amount
+        const oldAmount = Number(transaction.amount);
+        const amountDiff = amount - oldAmount;
+
+        // If new amount is different, adjust client balance
+        if (amountDiff !== 0 && transaction.clientId) {
+          let clientBalance = await queryRunner.manager.findOne(Balance, {
+            where: { userId: transaction.clientId },
+          });
+
+          if (!clientBalance) {
+            clientBalance = queryRunner.manager.create(Balance, {
+              userId: transaction.clientId,
+              amount: 0,
+            });
+          }
+
+          // If amount increased, deduct from client balance
+          // If amount decreased, refund to client balance
+          clientBalance.amount = Number(clientBalance.amount) - amountDiff;
+          await queryRunner.manager.save(clientBalance);
+        }
+
+        transaction.amount = amount;
+        transaction.status = TransactionStatus.PENDING;
+        transaction.description = `Milestone payment - awaiting acceptance (admin resolved dispute)`;
+        await queryRunner.manager.save(transaction);
+      } else {
+        // Create new transaction if none exists
+        transaction = queryRunner.manager.create(Transaction, {
+          clientId: milestone.clientId,
+          providerId: milestone.providerId,
+          milestoneId,
+          type: TransactionType.MILESTONE_PAYMENT,
+          status: TransactionStatus.PENDING,
+          amount,
+          description: `Milestone payment - awaiting acceptance (admin resolved dispute)`,
+        });
+
+        // Deduct from client balance
+        if (milestone.clientId) {
+          let clientBalance = await queryRunner.manager.findOne(Balance, {
+            where: { userId: milestone.clientId },
+          });
+
+          if (!clientBalance) {
+            clientBalance = queryRunner.manager.create(Balance, {
+              userId: milestone.clientId,
+              amount: 0,
+            });
+          }
+
+          if (Number(clientBalance.amount) < amount) {
+            throw new BadRequestException('Client has insufficient balance');
+          }
+
+          clientBalance.amount = Number(clientBalance.amount) - amount;
+          await queryRunner.manager.save(clientBalance);
+        }
+
+        transaction = await queryRunner.manager.save(transaction);
+      }
+
+      // Update milestone status to RELEASED
+      milestone.status = MilestoneStatus.RELEASED;
+      await queryRunner.manager.save(milestone);
+
+      await queryRunner.commitTransaction();
+
+      // Send notifications
+      await this.notificationService.createNotification(
+        providerId,
+        NotificationType.MILESTONE_PAYMENT_PENDING,
+        'Payment Awaiting Acceptance',
+        `A payment of ${Number(amount).toFixed(2)} USDT for milestone "${milestone.title}" is awaiting your acceptance (dispute resolved by admin).`,
+        { transactionId: transaction.id, milestoneId, amount },
+      );
+
+      await this.notificationService.createNotification(
+        milestone.clientId,
+        NotificationType.MILESTONE_UPDATED,
+        'Payment Released',
+        `Payment of ${Number(amount).toFixed(2)} USDT for milestone "${milestone.title}" has been released by admin and is awaiting provider acceptance.`,
+        { transactionId: transaction.id, milestoneId, amount },
+      );
+
+      // Emit balance update for client
+      if (milestone.clientId) {
+        const clientBalance = await this.balanceRepository.findOne({
+          where: { userId: milestone.clientId },
+        });
+        if (clientBalance) {
+          this.chatGateway.server.to(`user:${milestone.clientId}`).emit('balance_updated', {
+            balance: {
+              id: clientBalance.id,
+              userId: clientBalance.userId,
+              amount: Number(clientBalance.amount),
+              createdAt: clientBalance.createdAt.toISOString(),
+              updatedAt: clientBalance.updatedAt.toISOString(),
+            },
+          });
+        }
+      }
+
+      // Get conversation to emit milestone and payment updates
+      const conv = await this.conversationRepository.findOne({
+        where: {
+          serviceId: milestone.serviceId,
+          clientId: milestone.clientId,
+          providerId: milestone.providerId,
+          deletedAt: null,
+        },
+      });
+
+      if (conv) {
+        // Load transaction with relations for WebSocket emission
+        const transactionWithRelations = await this.transactionRepository.findOne({
+          where: { id: transaction.id },
+          relations: ['client', 'provider', 'milestone'],
+        });
+
+        // Load milestone with relations
+        const milestoneWithRelations = await this.milestoneRepository.findOne({
+          where: { id: milestone.id },
+          relations: ['client', 'provider', 'service'],
+        });
+
+        // Emit milestone update to conversation room
+        if (milestoneWithRelations) {
+          this.chatGateway.emitMilestoneUpdate(conv.id, milestoneWithRelations).catch((error) => {
+            console.error('Failed to emit milestone update:', error);
+          });
+        }
+
+        // Emit payment pending event to conversation room
+        if (transactionWithRelations) {
+          this.chatGateway.server.to(`conversation:${conv.id}`).emit('payment_pending', {
+            transaction: transactionWithRelations,
+            milestoneId: milestone.id,
+            conversationId: conv.id,
+          });
+        }
+      }
 
       return transaction;
     } catch (error) {
@@ -215,15 +450,16 @@ export class PaymentService {
 
       await queryRunner.commitTransaction();
 
-      // Load transaction with relations for WebSocket emission
+      // Load transaction with relations for WebSocket emission and notifications
       const transactionWithRelations = await this.transactionRepository.findOne({
         where: { id: transaction.id },
         relations: ['client', 'provider', 'milestone'],
       });
 
       // Get conversationId from milestone to emit WebSocket event
+      let conversation = null;
       if (transactionWithRelations?.milestone) {
-        const conversation = await this.conversationRepository.findOne({
+        conversation = await this.conversationRepository.findOne({
           where: [
             { clientId: transactionWithRelations.milestone.clientId, providerId: transactionWithRelations.milestone.providerId },
           ],
@@ -238,6 +474,27 @@ export class PaymentService {
           });
         }
       }
+
+      // Get milestone info for better notification messages
+      const milestone = transactionWithRelations?.milestone;
+      const milestoneTitle = milestone?.title || 'milestone';
+
+      // Create notifications for both client and provider
+      await this.notificationService.createNotification(
+        transaction.clientId!,
+        NotificationType.MILESTONE_UPDATED,
+        'Payment Accepted',
+        `Your payment of ${Number(transaction.amount).toFixed(2)} USDT for milestone "${milestoneTitle}" has been accepted by the provider.`,
+        { transactionId: transaction.id, milestoneId: transaction.milestoneId, amount: transaction.amount, conversationId: conversation?.id },
+      );
+
+      await this.notificationService.createNotification(
+        transaction.providerId!,
+        NotificationType.MILESTONE_UPDATED,
+        'Payment Accepted',
+        `You accepted and received ${Number(transaction.amount).toFixed(2)} USDT for milestone "${milestoneTitle}".`,
+        { transactionId: transaction.id, milestoneId: transaction.milestoneId, amount: transaction.amount, conversationId: conversation?.id },
+      );
 
       return transaction;
     } catch (error) {
@@ -288,6 +545,202 @@ export class PaymentService {
       ],
       relations: ['client', 'provider', 'milestone'],
     });
+  }
+
+  /**
+   * Handle milestone withdrawal - update transaction status and refund client balance
+   */
+  async withdrawMilestoneTransaction(milestoneId: string, providerId: string): Promise<Transaction> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Find the transaction for this milestone
+      const transaction = await queryRunner.manager.findOne(Transaction, {
+        where: { milestoneId, type: TransactionType.MILESTONE_PAYMENT },
+      });
+
+      if (!transaction) {
+        throw new NotFoundException('Transaction not found for this milestone');
+      }
+
+      // Verify user is the provider
+      if (transaction.providerId !== providerId) {
+        throw new BadRequestException('Only the provider can withdraw this milestone');
+      }
+
+      // Check if transaction can be withdrawn (not already withdrawn, cancelled, or failed)
+      if (transaction.status === TransactionStatus.WITHDRAW) {
+        throw new BadRequestException('Transaction is already withdrawn');
+      }
+
+      if (transaction.status === TransactionStatus.CANCELLED || transaction.status === TransactionStatus.FAILED) {
+        throw new BadRequestException(`Cannot withdraw transaction with status ${transaction.status}`);
+      }
+
+      // Store old status before updating
+      const oldStatus = transaction.status;
+
+      // Update transaction status to WITHDRAW
+      transaction.status = TransactionStatus.WITHDRAW;
+      transaction.description = `Milestone payment withdrawn`;
+      await queryRunner.manager.save(transaction);
+
+      // Refund client balance (amount was deducted when transaction was created)
+      if (transaction.clientId) {
+        let clientBalance = await queryRunner.manager.findOne(Balance, {
+          where: { userId: transaction.clientId },
+        });
+
+        if (!clientBalance) {
+          clientBalance = queryRunner.manager.create(Balance, {
+            userId: transaction.clientId,
+            amount: 0,
+          });
+        }
+
+        clientBalance.amount = Number(clientBalance.amount) + Number(transaction.amount);
+        await queryRunner.manager.save(clientBalance);
+      }
+
+      // If transaction was SUCCESS (provider had already accepted), deduct from provider balance
+      if (oldStatus === TransactionStatus.SUCCESS && transaction.providerId) {
+        let providerBalance = await queryRunner.manager.findOne(Balance, {
+          where: { userId: transaction.providerId },
+        });
+
+        if (providerBalance) {
+          providerBalance.amount = Number(providerBalance.amount) - Number(transaction.amount);
+          await queryRunner.manager.save(providerBalance);
+        }
+      }
+
+      await queryRunner.commitTransaction();
+
+      // Emit balance update event for client
+      if (transaction.clientId) {
+        const clientBalance = await this.balanceRepository.findOne({
+          where: { userId: transaction.clientId },
+        });
+        if (clientBalance) {
+          this.chatGateway.server.to(`user:${transaction.clientId}`).emit('balance_updated', {
+            balance: {
+              id: clientBalance.id,
+              userId: clientBalance.userId,
+              amount: Number(clientBalance.amount),
+              createdAt: clientBalance.createdAt.toISOString(),
+              updatedAt: clientBalance.updatedAt.toISOString(),
+            },
+          });
+        }
+      }
+
+      return transaction;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Handle milestone cancellation - update transaction status and refund client balance
+   */
+  async cancelMilestoneTransaction(milestoneId: string, clientId: string): Promise<Transaction> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Find the transaction for this milestone
+      const transaction = await queryRunner.manager.findOne(Transaction, {
+        where: { milestoneId, type: TransactionType.MILESTONE_PAYMENT },
+      });
+
+      if (!transaction) {
+        throw new NotFoundException('Transaction not found for this milestone');
+      }
+
+      // Verify user is the client
+      if (transaction.clientId !== clientId) {
+        throw new BadRequestException('Only the client can cancel this milestone');
+      }
+
+      // Check if transaction can be cancelled (not already cancelled, withdrawn, or failed)
+      if (transaction.status === TransactionStatus.CANCELLED) {
+        throw new BadRequestException('Transaction is already cancelled');
+      }
+
+      if (transaction.status === TransactionStatus.WITHDRAW || transaction.status === TransactionStatus.FAILED) {
+        throw new BadRequestException(`Cannot cancel transaction with status ${transaction.status}`);
+      }
+
+      // Store old status before updating
+      const oldStatus = transaction.status;
+
+      // Update transaction status to CANCELLED
+      transaction.status = TransactionStatus.CANCELLED;
+      transaction.description = `Milestone payment cancelled`;
+      await queryRunner.manager.save(transaction);
+
+      // Refund client balance (amount was deducted when transaction was created)
+      if (transaction.clientId) {
+        let clientBalance = await queryRunner.manager.findOne(Balance, {
+          where: { userId: transaction.clientId },
+        });
+
+        if (!clientBalance) {
+          clientBalance = queryRunner.manager.create(Balance, {
+            userId: transaction.clientId,
+            amount: 0,
+          });
+        }
+
+        clientBalance.amount = Number(clientBalance.amount) + Number(transaction.amount);
+        await queryRunner.manager.save(clientBalance);
+      }
+
+      // If transaction was SUCCESS (provider had already accepted), deduct from provider balance
+      if (oldStatus === TransactionStatus.SUCCESS && transaction.providerId) {
+        let providerBalance = await queryRunner.manager.findOne(Balance, {
+          where: { userId: transaction.providerId },
+        });
+
+        if (providerBalance) {
+          providerBalance.amount = Number(providerBalance.amount) - Number(transaction.amount);
+          await queryRunner.manager.save(providerBalance);
+        }
+      }
+
+      await queryRunner.commitTransaction();
+
+      // Emit balance update event for client
+      if (transaction.clientId) {
+        const clientBalance = await this.balanceRepository.findOne({
+          where: { userId: transaction.clientId },
+        });
+        if (clientBalance) {
+          this.chatGateway.server.to(`user:${transaction.clientId}`).emit('balance_updated', {
+            balance: {
+              id: clientBalance.id,
+              userId: clientBalance.userId,
+              amount: Number(clientBalance.amount),
+              createdAt: clientBalance.createdAt.toISOString(),
+              updatedAt: clientBalance.updatedAt.toISOString(),
+            },
+          });
+        }
+      }
+
+      return transaction;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   /**
@@ -540,6 +993,33 @@ export class PaymentService {
 
       await queryRunner.commitTransaction();
 
+      // Get updated balance for WebSocket emission
+      const updatedBalance = await this.balanceRepository.findOne({
+        where: { userId: currentTransaction.clientId },
+      });
+
+      // Create notification for successful charge
+      await this.notificationService.createNotification(
+        currentTransaction.clientId!,
+        NotificationType.PAYMENT_CHARGE,
+        'Charge Completed',
+        `Your balance has been charged with ${Number(currentTransaction.amount).toFixed(2)} USDT`,
+        { transactionId: currentTransaction.id, amount: currentTransaction.amount },
+      );
+
+      // Emit balance update event via WebSocket
+      if (currentTransaction.clientId && updatedBalance) {
+        this.chatGateway.server.to(`user:${currentTransaction.clientId}`).emit('balance_updated', {
+          balance: {
+            id: updatedBalance.id,
+            userId: updatedBalance.userId,
+            amount: Number(updatedBalance.amount),
+            createdAt: updatedBalance.createdAt.toISOString(),
+            updatedAt: updatedBalance.updatedAt.toISOString(),
+          },
+        });
+      }
+
       return { success: true, message: 'Charge processed successfully' };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -689,8 +1169,17 @@ export class PaymentService {
 
       await queryRunner.commitTransaction();
 
-      // Emit WebSocket notification to user if they're online
+      // Create notification for successful withdraw
       if (transaction.clientId) {
+        await this.notificationService.createNotification(
+          transaction.clientId,
+          NotificationType.PAYMENT_WITHDRAW,
+          'Withdrawal Completed',
+          `Your withdrawal of ${Number(transaction.amount).toFixed(2)} USDT has been processed successfully`,
+          { transactionId: transaction.id, amount: transaction.amount, transactionHash: result.transactionHash },
+        );
+
+        // Emit WebSocket notification to user if they're online
         this.chatGateway.server.to(`user:${transaction.clientId}`).emit('withdraw_completed', {
           transactionId: transaction.id,
           amount: transaction.amount,

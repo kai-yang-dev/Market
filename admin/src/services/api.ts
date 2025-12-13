@@ -94,6 +94,16 @@ export const adminApi = {
     const response = await api.post(`/admin/withdraws/${withdrawId}/accept`);
     return response.data;
   },
+
+  getDisputes: async () => {
+    const response = await api.get('/admin/disputes');
+    return response.data;
+  },
+
+  releaseMilestone: async (milestoneId: string, amount: number) => {
+    const response = await api.post(`/admin/milestones/${milestoneId}/release`, { amount });
+    return response.data;
+  },
 };
 
 export const categoryApi = {
@@ -238,6 +248,145 @@ export const blogApi = {
     await api.delete(`/blog/${id}/admin`);
   },
 };
+
+export interface Notification {
+  id: string;
+  userId?: string;
+  type: 'broadcast' | 'payment_charge' | 'payment_withdraw' | 'payment_transfer' | 'message' | 'service_approved' | 'service_blocked' | 'service_unblocked' | 'milestone_created' | 'milestone_updated' | 'milestone_payment_pending';
+  title: string;
+  message: string;
+  readAt?: string;
+  metadata?: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateNotificationData {
+  title: string;
+  message: string;
+  metadata?: Record<string, any>;
+}
+
+export interface NotificationListResponse {
+  data: Notification[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  unreadCount: number;
+}
+
+export const notificationApi = {
+  getAll: async (params?: {
+    page?: number;
+    limit?: number;
+  }): Promise<NotificationListResponse> => {
+    const response = await api.get('/notifications', { params });
+    return response.data;
+  },
+
+  getUnreadCount: async (): Promise<{ count: number }> => {
+    const response = await api.get('/notifications/unread-count');
+    return response.data;
+  },
+
+  markAsRead: async (notificationId: string): Promise<Notification> => {
+    const response = await api.patch(`/notifications/${notificationId}/read`);
+    return response.data;
+  },
+
+  markAllAsRead: async (): Promise<void> => {
+    await api.patch('/notifications/read-all');
+  },
+
+  delete: async (notificationId: string): Promise<void> => {
+    await api.delete(`/notifications/${notificationId}`);
+  },
+
+  broadcast: async (data: CreateNotificationData) => {
+    const response = await api.post('/admin/notifications/broadcast', data);
+    return response.data;
+  },
+};
+
+export interface Conversation {
+  id: string
+  clientId: string
+  providerId: string
+  serviceId: string
+  client?: {
+    id: string
+    firstName?: string
+    lastName?: string
+    userName?: string
+    email?: string
+  }
+  provider?: {
+    id: string
+    firstName?: string
+    lastName?: string
+    userName?: string
+    email?: string
+  }
+  service?: {
+    id: string
+    title: string
+  }
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Message {
+  id: string
+  conversationId: string
+  senderId: string
+  message: string
+  sender?: {
+    id: string
+    firstName?: string
+    lastName?: string
+    userName?: string
+  }
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Milestone {
+  id: string
+  title: string
+  description: string
+  balance: number
+  status: string
+  clientId: string
+  providerId: string
+  createdAt: string
+  updatedAt: string
+}
+
+export const conversationApi = {
+  getById: async (id: string): Promise<Conversation> => {
+    const response = await api.get(`/conversations/${id}`)
+    return response.data
+  },
+}
+
+export const messageApi = {
+  getByConversation: async (conversationId: string): Promise<Message[]> => {
+    const response = await api.get(`/messages/conversation/${conversationId}`)
+    return response.data
+  },
+  create: async (conversationId: string, message: string): Promise<Message> => {
+    const response = await api.post(`/messages/conversation/${conversationId}`, { message })
+    return response.data
+  },
+}
+
+export const milestoneApi = {
+  getByConversation: async (conversationId: string): Promise<Milestone[]> => {
+    const response = await api.get(`/milestones/conversation/${conversationId}`)
+    return response.data
+  },
+}
 
 export default api;
 

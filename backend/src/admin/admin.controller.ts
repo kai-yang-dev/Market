@@ -2,6 +2,7 @@ import { Controller, Post, Body, Get, UseGuards, Request, Param } from '@nestjs/
 import { AdminService } from './admin.service';
 import { AdminSignInDto } from './dto/admin-signin.dto';
 import { AdminGuard } from './guards/admin.guard';
+import { CreateNotificationDto } from '../notification/dto/create-notification.dto';
 
 @Controller('admin')
 export class AdminController {
@@ -28,6 +29,24 @@ export class AdminController {
   @Post('withdraws/:withdrawId/accept')
   async acceptWithdraw(@Param('withdrawId') withdrawId: string) {
     return this.adminService.acceptWithdraw(withdrawId);
+  }
+
+  @UseGuards(AdminGuard)
+  @Post('notifications/broadcast')
+  async broadcastNotification(@Body() dto: CreateNotificationDto) {
+    return this.adminService.broadcastNotification(dto.title, dto.message, dto.metadata);
+  }
+
+  @UseGuards(AdminGuard)
+  @Get('disputes')
+  async getDisputes() {
+    return this.adminService.getDisputes();
+  }
+
+  @UseGuards(AdminGuard)
+  @Post('milestones/:id/release')
+  async releaseMilestone(@Param('id') id: string, @Body() body: { amount: number }) {
+    return this.adminService.releaseMilestone(id, body.amount);
   }
 }
 

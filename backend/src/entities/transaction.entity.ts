@@ -16,6 +16,7 @@ export enum TransactionStatus {
   SUCCESS = 'success',
   FAILED = 'failed',
   CANCELLED = 'cancelled',
+  WITHDRAW = 'withdraw',
 }
 
 @Entity('transactions')
