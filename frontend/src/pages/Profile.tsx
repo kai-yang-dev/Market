@@ -22,6 +22,7 @@ import {
   faPhone,
   faMapMarkerAlt,
   faFileAlt,
+  faShieldAlt,
 } from '@fortawesome/free-solid-svg-icons'
 import { useAppSelector, useAppDispatch } from '../store/hooks'
 import { updateUser, User as UserType } from '../store/slices/authSlice'
@@ -302,15 +303,26 @@ function Profile() {
                           <FontAwesomeIcon icon={faUser} className="text-blue-400" />
                           <span>Profile Information</span>
                         </h2>
-                        {!isEditing && (
-                          <button
-                            onClick={() => setIsEditing(true)}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center space-x-2"
-                          >
-                            <FontAwesomeIcon icon={faEdit} className="text-sm" />
-                            <span>Edit</span>
-                          </button>
-                        )}
+                        <div className="flex items-center space-x-3">
+                          {!isEditing && (
+                            <>
+                              <Link
+                                to="/settings/security"
+                                className="px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors flex items-center space-x-2"
+                              >
+                                <FontAwesomeIcon icon={faShieldAlt} className="text-sm" />
+                                <span>Security Settings</span>
+                              </Link>
+                              <button
+                                onClick={() => setIsEditing(true)}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                              >
+                                <FontAwesomeIcon icon={faEdit} className="text-sm" />
+                                <span>Edit</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
 
                       {error && (

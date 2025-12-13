@@ -14,6 +14,12 @@ function SignIn() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // 2FA state
+  const [requires2FA, setRequires2FA] = useState(false);
+  const [tempToken, setTempToken] = useState<string | null>(null);
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [twoFactorMethod, setTwoFactorMethod] = useState<'totp' | 'sms' | 'email'>('totp');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,9 +28,19 @@ function SignIn() {
 
     try {
       const response = await authApi.signIn(formData);
-      dispatch(setCredentials({ user: response.user, accessToken: response.accessToken }));
-      showToast.success('Welcome back!');
-      navigate('/');
+      
+      // Check if 2FA is required
+      if (response.requires2FA) {
+        setRequires2FA(true);
+        setTempToken(response.tempToken);
+        setTwoFactorMethod(response.method || 'totp');
+        showToast.info('Please enter your 2FA code');
+      } else {
+        // Normal login
+        dispatch(setCredentials({ user: response.user, accessToken: response.accessToken }));
+        showToast.success('Welcome back!');
+        navigate('/');
+      }
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Invalid email or password';
       setError(errorMessage);
@@ -33,6 +49,92 @@ function SignIn() {
       setLoading(false);
     }
   };
+
+  const handle2FAVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tempToken) return;
+
+    setError('');
+    setLoading(true);
+
+    try {
+      const response = await authApi.twoFactor.verifyLogin(tempToken, twoFactorCode);
+      dispatch(setCredentials({ user: response.user, accessToken: response.accessToken }));
+      showToast.success('Welcome back!');
+      navigate('/');
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.message || 'Invalid 2FA code';
+      setError(errorMessage);
+      showToast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (requires2FA) {
+    return (
+      <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full">
+          <div className="glass-card rounded-2xl shadow-2xl p-8 space-y-8">
+            <div className="text-center">
+              <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-emerald-600 flex items-center justify-center mb-4 shadow-lg shadow-primary/20 ring-1 ring-white/10">
+                <span className="text-white font-bold text-2xl">O</span>
+              </div>
+              <h2 className="text-3xl font-bold text-white mb-2">
+                Two-Factor Authentication
+              </h2>
+              <p className="text-slate-400">
+                Enter the code from your {twoFactorMethod === 'totp' ? 'authenticator app' : twoFactorMethod === 'sms' ? 'SMS' : 'email'}
+              </p>
+            </div>
+
+            <form className="space-y-6" onSubmit={handle2FAVerify}>
+              {error && (
+                <div className="bg-red-500/10 border-l-4 border-red-500 text-red-200 px-4 py-3 rounded">
+                  <p className="font-medium">{error}</p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Verification Code
+                </label>
+                <input
+                  type="text"
+                  required
+                  maxLength={10}
+                  className="w-full px-4 py-3 glass-card rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 transition-all text-center text-2xl tracking-widest"
+                  placeholder="000000"
+                  value={twoFactorCode}
+                  onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || twoFactorCode.length < 4}
+                className="w-full py-3 px-4 bg-primary text-primary-foreground rounded-full font-semibold hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-glow-primary hover:shadow-glow-primary-lg hover:-translate-y-1"
+              >
+                {loading ? 'Verifying...' : 'Verify'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setRequires2FA(false);
+                  setTempToken(null);
+                  setTwoFactorCode('');
+                }}
+                className="w-full text-sm text-slate-400 hover:text-slate-300"
+              >
+                Back to login
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">

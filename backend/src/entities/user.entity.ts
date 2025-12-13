@@ -47,6 +47,21 @@ export class User extends BaseEntity {
   @Column({ name: 'phone_verified', default: false })
   phoneVerified: boolean;
 
+  @Column({ name: 'two_factor_enabled', default: false })
+  twoFactorEnabled: boolean;
+
+  @Column({ name: 'two_factor_secret', nullable: true })
+  twoFactorSecret?: string;
+
+  @Column({ name: 'two_factor_method', nullable: true, default: 'totp' })
+  twoFactorMethod?: string; // 'totp', 'sms', 'email'
+
+  @Column({ name: 'backup_codes', type: 'text', nullable: true })
+  backupCodes?: string; // JSON array of hashed backup codes
+
+  @Column({ name: 'two_factor_verified_at', nullable: true })
+  twoFactorVerifiedAt?: Date;
+
   @Column({ default: 'active' })
   status: string;
 }

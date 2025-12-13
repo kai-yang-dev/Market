@@ -221,6 +221,38 @@ export const authApi = {
     const response = await api.patch('/auth/profile', data);
     return response.data;
   },
+
+  twoFactor: {
+    enable: async (method: 'totp' | 'sms' | 'email') => {
+      const response = await api.post('/auth/2fa/enable', { method });
+      return response.data;
+    },
+    
+    verifySetup: async (code: string) => {
+      const response = await api.post('/auth/2fa/verify-setup', { code });
+      return response.data;
+    },
+    
+    verifyLogin: async (tempToken: string, code: string) => {
+      const response = await api.post('/auth/verify-2fa', { tempToken, code });
+      return response.data;
+    },
+    
+    disable: async (password: string) => {
+      const response = await api.post('/auth/2fa/disable', { password });
+      return response.data;
+    },
+    
+    regenerateBackupCodes: async (password: string) => {
+      const response = await api.post('/auth/2fa/regenerate-backup-codes', { password });
+      return response.data;
+    },
+    
+    getStatus: async () => {
+      const response = await api.get('/auth/2fa/status');
+      return response.data;
+    },
+  },
 };
 
 export const categoryApi = {

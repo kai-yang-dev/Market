@@ -21,6 +21,7 @@ import { SignInDto } from './dto/sign-in.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { EmailService } from './email.service';
 import { SmsService } from './sms.service';
+import { TwoFactorService } from './two-factor.service';
 
 @Injectable()
 export class AuthService {
@@ -34,6 +35,7 @@ export class AuthService {
     private jwtService: JwtService,
     private emailService: EmailService,
     private smsService: SmsService,
+    private twoFactorService: TwoFactorService,
   ) {}
 
   async signUpStep1(dto: SignUpStep1Dto) {
@@ -273,6 +275,28 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // If 2FA is enabled, return a temporary token instead of access token
+    if (user.twoFactorEnabled) {
+      // Generate temporary token for 2FA verification (expires in 5 minutes)
+      const tempToken = this.jwtService.sign(
+        { 
+          sub: user.id, 
+          email: user.email,
+          type: '2fa_verification',
+          requires2FA: true 
+        },
+        { expiresIn: '5m' }
+      );
+
+      return {
+        requires2FA: true,
+        tempToken,
+        method: user.twoFactorMethod,
+        message: '2FA verification required',
+      };
+    }
+
+    // Normal login flow
     const payload = { sub: user.id, email: user.email };
     const accessToken = this.jwtService.sign(payload);
 
@@ -287,6 +311,55 @@ export class AuthService {
         role: user.role,
       },
     };
+  }
+
+  async verifyTwoFactorLogin(tempToken: string, code: string) {
+    try {
+      // Verify temporary token
+      const payload = this.jwtService.verify(tempToken);
+      
+      if (payload.type !== '2fa_verification' || !payload.requires2FA) {
+        throw new BadRequestException('Invalid token');
+      }
+
+      const user = await this.userRepository.findOne({
+        where: { id: payload.sub },
+      });
+
+      if (!user || !user.twoFactorEnabled) {
+        throw new BadRequestException('2FA not enabled');
+      }
+
+      // Verify 2FA code using TwoFactorService
+      const isValid = await this.twoFactorService.verifyTotpCode(user.id, code);
+
+      if (!isValid) {
+        throw new UnauthorizedException('Invalid 2FA code');
+      }
+
+      // Generate final access token
+      const accessToken = this.jwtService.sign({
+        sub: user.id,
+        email: user.email,
+      });
+
+      return {
+        accessToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          userName: user.userName,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+        },
+      };
+    } catch (error) {
+      if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+        throw new BadRequestException('Invalid or expired token');
+      }
+      throw error;
+    }
   }
 
   async getProfile(userId: string) {
@@ -312,6 +385,8 @@ export class AuthService {
       role: user.role,
       emailVerified: user.emailVerified,
       phoneVerified: user.phoneVerified,
+      twoFactorEnabled: user.twoFactorEnabled,
+      twoFactorMethod: user.twoFactorMethod,
       status: user.status,
     };
   }

@@ -15,6 +15,7 @@ import ChargeDetail from './pages/ChargeDetail'
 import Withdraw from './pages/Withdraw'
 import Transactions from './pages/Transactions'
 import Notifications from './pages/Notifications'
+import SecuritySettings from './pages/SecuritySettings'
 import Layout from './components/Layout'
 
 function App() {
@@ -37,6 +38,7 @@ function App() {
                 <Route path="/services/:id" element={<ServiceDetail />} />
                 <Route path="/chat/:id" element={<Chat />} />
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/settings/security" element={<SecuritySettings />} />
                 <Route path="/charge" element={<Charge />} />
                 <Route path="/charge/:walletAddress" element={<ChargeDetail />} />
                 <Route path="/withdraw" element={<Withdraw />} />

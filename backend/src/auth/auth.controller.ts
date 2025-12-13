@@ -9,6 +9,7 @@ import {
   Param,
   Query,
   ParseUUIDPipe,
+  BadRequestException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import {
@@ -22,10 +23,20 @@ import { SignInDto } from './dto/sign-in.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { TwoFactorService } from './two-factor.service';
+import {
+  EnableTwoFactorDto,
+  VerifyTwoFactorSetupDto,
+  DisableTwoFactorDto,
+  RegenerateBackupCodesDto,
+} from './dto/two-factor.dto';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly twoFactorService: TwoFactorService,
+  ) {}
 
   @Post('signup/step1')
   async signUpStep1(@Body() dto: SignUpStep1Dto) {
@@ -80,10 +91,71 @@ export class AuthController {
     return this.authService.signIn(dto);
   }
 
+  @Post('verify-2fa')
+  async verifyTwoFactorLogin(@Body() dto: { tempToken: string; code: string }) {
+    return this.authService.verifyTwoFactorLogin(dto.tempToken, dto.code);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('profile')
   async getProfile(@Request() req) {
     return this.authService.getProfile(req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/enable')
+  async enableTwoFactor(@Request() req, @Body() dto: EnableTwoFactorDto) {
+    if (dto.method === 'totp') {
+      const result = await this.twoFactorService.generateTotpSecret(
+        req.user.id,
+        req.user.email,
+      );
+      return result;
+    }
+    throw new BadRequestException('Invalid 2FA method');
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/verify-setup')
+  async verifyTwoFactorSetup(
+    @Request() req,
+    @Body() dto: VerifyTwoFactorSetupDto,
+  ) {
+    const result = await this.twoFactorService.verifyTotpSetup(
+      req.user.id,
+      dto.code,
+    );
+    return result;
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/disable')
+  async disableTwoFactor(@Request() req, @Body() dto: DisableTwoFactorDto) {
+    await this.twoFactorService.disableTwoFactor(req.user.id, dto.password);
+    return { message: '2FA disabled successfully' };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/regenerate-backup-codes')
+  async regenerateBackupCodes(
+    @Request() req,
+    @Body() dto: RegenerateBackupCodesDto,
+  ) {
+    const codes = await this.twoFactorService.regenerateBackupCodes(
+      req.user.id,
+      dto.password,
+    );
+    return { backupCodes: codes };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('2fa/status')
+  async getTwoFactorStatus(@Request() req) {
+    const user = await this.authService.getProfile(req.user.id);
+    return {
+      enabled: user.twoFactorEnabled || false,
+      method: user.twoFactorMethod || null,
+    };
   }
 
   @UseGuards(JwtAuthGuard)
