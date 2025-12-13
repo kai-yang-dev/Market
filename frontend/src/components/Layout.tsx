@@ -1,12 +1,12 @@
 import { ReactNode, useState, useRef, useEffect, useCallback } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faChevronDown, faSignOutAlt, faUserCircle, faBars, faWallet } from '@fortawesome/free-solid-svg-icons'
+import { faChevronDown, faSignOutAlt, faUserCircle, faBars, faWallet, faShieldAlt, faExclamationTriangle } from '@fortawesome/free-solid-svg-icons'
 import { useAppSelector, useAppDispatch } from '../store/hooks'
 import { logout } from '../store/slices/authSlice'
 import { showToast } from '../utils/toast'
 import { getSocket } from '../services/socket'
-import { Message, paymentApi, Balance, Notification } from '../services/api'
+import { Message, paymentApi, Balance, Notification, authApi } from '../services/api'
 import { Socket } from 'socket.io-client'
 import Footer from './Footer'
 import NotificationDropdown from './NotificationDropdown'
@@ -25,6 +25,7 @@ function Layout({ children }: LayoutProps) {
   const [balanceDropdownOpen, setBalanceDropdownOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [balance, setBalance] = useState<Balance | null>(null)
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState<boolean | null>(null)
   const servicesDropdownRef = useRef<HTMLDivElement>(null)
   const userDropdownRef = useRef<HTMLDivElement>(null)
   const balanceDropdownRef = useRef<HTMLDivElement>(null)
@@ -51,6 +52,39 @@ function Layout({ children }: LayoutProps) {
   useEffect(() => {
     refreshBalance()
   }, [refreshBalance])
+
+  // Fetch 2FA status
+  const fetch2FAStatus = useCallback(() => {
+    if (isAuthenticated && user) {
+      authApi.twoFactor.getStatus()
+        .then((status) => {
+          setTwoFactorEnabled(status.enabled)
+        })
+        .catch((error) => {
+          console.error('Failed to fetch 2FA status:', error)
+          // If error, assume 2FA is not enabled to show the badge
+          setTwoFactorEnabled(false)
+        })
+    } else {
+      setTwoFactorEnabled(null)
+    }
+  }, [isAuthenticated, user])
+
+  // Fetch 2FA status on mount and when auth changes
+  useEffect(() => {
+    fetch2FAStatus()
+  }, [fetch2FAStatus])
+
+  // Refresh 2FA status when navigating away from security settings
+  useEffect(() => {
+    if (location.pathname !== '/settings/security' && isAuthenticated) {
+      // Small delay to ensure the status is updated on the backend
+      const timer = setTimeout(() => {
+        fetch2FAStatus()
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [location.pathname, isAuthenticated, fetch2FAStatus])
 
   // Listen for balance update events (from Chat page when milestones are created/released)
   useEffect(() => {
@@ -314,6 +348,18 @@ function Layout({ children }: LayoutProps) {
               <div className="flex items-center gap-4">
                 {isAuthenticated && user ? (
                   <>
+                    {/* 2FA Warning Badge */}
+                    {twoFactorEnabled === false && (
+                      <Link
+                        to="/settings/security"
+                        className="hidden md:flex items-center gap-2 px-3 py-2 rounded-full bg-yellow-500/20 border border-yellow-500/50 hover:bg-yellow-500/30 transition-all group relative"
+                        title="Enable Two-Factor Authentication for better security"
+                      >
+                        <FontAwesomeIcon icon={faExclamationTriangle} className="text-yellow-400 text-sm" />
+                        <span className="text-xs font-semibold text-yellow-300">Enable 2FA</span>
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                      </Link>
+                    )}
                     {/* Notifications */}
                     <NotificationDropdown userId={user.id} />
                     {/* Balance Dropdown */}
@@ -458,6 +504,17 @@ function Layout({ children }: LayoutProps) {
               </Link>
               {isAuthenticated && (
                 <>
+                  {/* 2FA Warning Badge - Mobile */}
+                  {twoFactorEnabled === false && (
+                    <Link
+                      to="/settings/security"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="block px-4 py-2 text-sm font-medium text-yellow-300 hover:text-yellow-200 hover:bg-yellow-500/10 transition-colors border-b border-yellow-500/20 flex items-center space-x-2"
+                    >
+                      <FontAwesomeIcon icon={faExclamationTriangle} className="text-sm" />
+                      <span>Enable 2FA for Security</span>
+                    </Link>
+                  )}
                   <div className="px-4 py-2 border-b border-white/10">
                     <div className="flex items-center space-x-2">
                       <FontAwesomeIcon icon={faWallet} className="text-primary" />
