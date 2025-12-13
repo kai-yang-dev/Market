@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Param, Patch, UseGuards, Request } from '@
 import { MilestoneService } from './milestone.service';
 import { CreateMilestoneDto } from './dto/create-milestone.dto';
 import { UpdateMilestoneStatusDto } from './dto/update-milestone-status.dto';
+import { ReleaseMilestoneDto } from './dto/release-milestone.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { MilestoneStatus } from '../entities/milestone.entity';
 
@@ -75,9 +76,9 @@ export class MilestoneController {
 
   @Patch(':id/release')
   @UseGuards(JwtAuthGuard)
-  async release(@Param('id') id: string, @Request() req) {
+  async release(@Param('id') id: string, @Request() req, @Body() releaseMilestoneDto: ReleaseMilestoneDto) {
     const isAdmin = req.user.role === 'admin';
-    return this.milestoneService.updateStatus(id, req.user.id, { status: MilestoneStatus.RELEASED }, isAdmin);
+    return this.milestoneService.releaseMilestone(id, req.user.id, releaseMilestoneDto, isAdmin);
   }
 
   @Patch(':id/dispute')

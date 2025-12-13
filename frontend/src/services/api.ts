@@ -389,6 +389,8 @@ export interface Milestone {
   attachedFiles?: string[];
   balance: number;
   status: 'draft' | 'processing' | 'canceled' | 'completed' | 'withdraw' | 'released' | 'dispute';
+  feedback?: string;
+  rating?: number;
   client?: {
     id: string;
     firstName?: string;
@@ -655,8 +657,8 @@ export const milestoneApi = {
     return response.data;
   },
 
-  release: async (id: string): Promise<Milestone> => {
-    const response = await api.patch(`/milestones/${id}/release`);
+  release: async (id: string, data: { feedback: string; rating: number }): Promise<Milestone> => {
+    const response = await api.patch(`/milestones/${id}/release`, data);
     return response.data;
   },
 

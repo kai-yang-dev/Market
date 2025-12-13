@@ -6,6 +6,7 @@ import { Conversation } from '../entities/conversation.entity';
 import { Message } from '../entities/message.entity';
 import { CreateMilestoneDto } from './dto/create-milestone.dto';
 import { UpdateMilestoneStatusDto } from './dto/update-milestone-status.dto';
+import { ReleaseMilestoneDto } from './dto/release-milestone.dto';
 import { ChatGateway } from '../chat/chat.gateway';
 import { PaymentService } from '../payment/payment.service';
 import { NotificationService } from '../notification/notification.service';
@@ -161,6 +162,12 @@ export class MilestoneService {
       }
     }
 
+    // Prevent non-admin users from releasing milestone through updateStatus
+    // They must use the releaseMilestone endpoint which requires feedback and rating
+    if (updateStatusDto.status === MilestoneStatus.RELEASED && !isAdmin) {
+      throw new BadRequestException('To release a milestone, please use the /release endpoint which requires feedback and rating');
+    }
+
     milestone.status = updateStatusDto.status;
     const savedMilestone = await this.milestoneRepository.save(milestone);
     
@@ -254,6 +261,117 @@ export class MilestoneService {
           conversationId: conv.id,
           senderId: userId,
           message: `Milestone "${milestone.title}" status changed from ${oldStatus} to ${updateStatusDto.status}`,
+        });
+        
+        const savedMessage = await this.messageRepository.save(statusChangeMessage);
+        
+        // Update conversation's updatedAt
+        await this.conversationRepository.update(conv.id, { updatedAt: new Date() });
+        
+        // Load message with sender info
+        const messageWithSender = await this.messageRepository.findOne({
+          where: { id: savedMessage.id },
+          relations: ['sender'],
+        });
+        
+        // Emit new message via WebSocket
+        if (messageWithSender) {
+          this.chatGateway.server.to(`conversation:${conv.id}`).emit('new_message', messageWithSender);
+        }
+        
+        // Also emit milestone update via WebSocket
+        this.chatGateway.emitMilestoneUpdate(conv.id, savedMilestone).catch((error) => {
+          console.error('Failed to emit milestone update:', error);
+        });
+      }
+    }
+    
+    return savedMilestone;
+  }
+
+  async releaseMilestone(id: string, userId: string, releaseMilestoneDto: ReleaseMilestoneDto, isAdmin: boolean = false): Promise<Milestone> {
+    const milestone = await this.findOne(id, userId, isAdmin);
+    
+    // Only client can release milestone
+    if (!isAdmin && milestone.clientId !== userId) {
+      throw new ForbiddenException('Only the client can release a milestone');
+    }
+
+    // Validate status transition
+    if (!isAdmin) {
+      const validTransitions = this.getValidStatusTransitions(milestone.status, userId, milestone.clientId, milestone.providerId);
+      
+      if (!validTransitions.includes(MilestoneStatus.RELEASED)) {
+        throw new BadRequestException(`Invalid status transition from ${milestone.status} to ${MilestoneStatus.RELEASED}`);
+      }
+    }
+
+    // Validate feedback and rating are provided
+    if (!releaseMilestoneDto.feedback || !releaseMilestoneDto.feedback.trim()) {
+      throw new BadRequestException('Feedback is required when releasing a milestone');
+    }
+
+    if (!releaseMilestoneDto.rating || releaseMilestoneDto.rating < 1 || releaseMilestoneDto.rating > 5) {
+      throw new BadRequestException('Rating must be between 1 and 5');
+    }
+
+    // Update milestone with feedback, rating, and status
+    milestone.feedback = releaseMilestoneDto.feedback;
+    milestone.rating = releaseMilestoneDto.rating;
+    milestone.status = MilestoneStatus.RELEASED;
+    
+    const savedMilestone = await this.milestoneRepository.save(milestone);
+    
+    // Update transaction and provider balance
+    await this.paymentService.releaseMilestoneTransaction(savedMilestone.id, savedMilestone.providerId);
+    
+    // Find conversation ID from milestone
+    const milestoneWithConversation = await this.milestoneRepository.findOne({
+      where: { id: savedMilestone.id },
+      relations: ['service'],
+    });
+    
+    if (milestoneWithConversation) {
+      // Find conversation by service, client, and provider
+      const conv = await this.conversationRepository.findOne({
+        where: {
+          serviceId: milestoneWithConversation.serviceId,
+          clientId: milestone.clientId,
+          providerId: milestone.providerId,
+          deletedAt: null,
+        },
+      });
+      
+      if (conv) {
+        // Get user info for notifications
+        const client = await this.userRepository.findOne({ where: { id: userId } });
+        const clientName = client
+          ? `${client.firstName || ''} ${client.lastName || ''}`.trim() || client.userName || 'A client'
+          : 'A client';
+
+        // Send notification to provider about milestone release with feedback
+        await this.notificationService.createNotification(
+          milestone.providerId,
+          NotificationType.MILESTONE_UPDATED,
+          'Milestone Released',
+          `${clientName} released the milestone "${milestone.title}" with a ${releaseMilestoneDto.rating}-star rating`,
+          { milestoneId: savedMilestone.id, conversationId: conv.id, status: MilestoneStatus.RELEASED },
+        );
+
+        // Also notify the client (confirmation)
+        await this.notificationService.createNotification(
+          userId,
+          NotificationType.MILESTONE_UPDATED,
+          'Milestone Released',
+          `You released the milestone "${milestone.title}". Provider can now accept the payment.`,
+          { milestoneId: savedMilestone.id, conversationId: conv.id, status: MilestoneStatus.RELEASED },
+        );
+        
+        // Create a system message for milestone release
+        const statusChangeMessage = this.messageRepository.create({
+          conversationId: conv.id,
+          senderId: userId,
+          message: `Milestone "${milestone.title}" has been released with a ${releaseMilestoneDto.rating}-star rating. Feedback: ${releaseMilestoneDto.feedback}`,
         });
         
         const savedMessage = await this.messageRepository.save(statusChangeMessage);

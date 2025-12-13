@@ -43,6 +43,12 @@ function Chat() {
     description: '',
     balance: '',
   })
+  const [showReleaseModal, setShowReleaseModal] = useState(false)
+  const [releaseForm, setReleaseForm] = useState({
+    milestoneId: '',
+    feedback: '',
+    rating: 0,
+  })
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [updatingMilestone, setUpdatingMilestone] = useState<string | null>(null)
@@ -515,6 +521,14 @@ function Chat() {
         return
       }
       
+      // For release action, show the feedback/rating modal
+      if (action === 'release') {
+        setReleaseForm({ milestoneId, feedback: '', rating: 0 })
+        setShowReleaseModal(true)
+        setUpdatingMilestone(null)
+        return
+      }
+      
       switch (action) {
         case 'accept':
           await milestoneApi.accept(milestoneId)
@@ -527,12 +541,6 @@ function Chat() {
           break
         case 'withdraw':
           await milestoneApi.withdraw(milestoneId)
-          break
-        case 'release':
-          await milestoneApi.release(milestoneId)
-          showToast.success('Milestone released! Provider can now accept the payment.')
-          // Refresh milestones to get pending payment
-          await fetchMilestones()
           break
         case 'dispute':
           await milestoneApi.dispute(milestoneId)
@@ -547,6 +555,40 @@ function Chat() {
     } catch (error: any) {
       console.error(`Failed to ${action} milestone:`, error)
       const errorMessage = error.response?.data?.message || error.message || `Failed to ${action} milestone. Please try again.`
+      showToast.error(errorMessage)
+    } finally {
+      setUpdatingMilestone(null)
+    }
+  }
+
+  const handleReleaseMilestone = async () => {
+    if (!releaseForm.feedback.trim()) {
+      showToast.error('Please provide feedback')
+      return
+    }
+    if (releaseForm.rating < 1 || releaseForm.rating > 5) {
+      showToast.error('Please select a rating between 1 and 5')
+      return
+    }
+
+    try {
+      setUpdatingMilestone(releaseForm.milestoneId)
+      await milestoneApi.release(releaseForm.milestoneId, {
+        feedback: releaseForm.feedback,
+        rating: releaseForm.rating,
+      })
+      showToast.success('Milestone released! Provider can now accept the payment.')
+      setShowReleaseModal(false)
+      setReleaseForm({ milestoneId: '', feedback: '', rating: 0 })
+      await fetchMilestones()
+      await fetchMessages()
+      // Emit milestone update via WebSocket
+      if (socketRef.current) {
+        socketRef.current.emit('milestone_updated', { conversationId: id })
+      }
+    } catch (error: any) {
+      console.error('Failed to release milestone:', error)
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to release milestone. Please try again.'
       showToast.error(errorMessage)
     } finally {
       setUpdatingMilestone(null)
@@ -1197,6 +1239,26 @@ function Chat() {
                       </span>
                     </div>
                     <p className="text-sm text-slate-400 leading-relaxed">{milestone.description}</p>
+                    {milestone.feedback && milestone.rating && (
+                      <div className="pt-2 border-t border-white/10 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-400">Rating:</span>
+                          <div className="flex gap-1">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <span
+                                key={star}
+                                className={`text-sm ${
+                                  star <= milestone.rating! ? 'text-yellow-400' : 'text-slate-600'
+                                }`}
+                              >
+                                ★
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <p className="text-xs text-slate-300 italic">"{milestone.feedback}"</p>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between pt-2 border-t border-white/10">
                       <span className="text-base font-bold text-primary">${Number(milestone.balance).toFixed(2)}</span>
                     </div>
@@ -1307,6 +1369,85 @@ function Chat() {
           </div>
         </div>
       </div>
+
+      {/* Release Milestone Modal */}
+      {showReleaseModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="glass-card rounded-xl p-6 max-w-md w-full space-y-4">
+            <h2 className="text-xl font-bold text-white mb-4">Release Milestone</h2>
+            <p className="text-slate-300 text-sm mb-4">
+              Please provide feedback and rate the provider (1-5 stars) before releasing this milestone.
+            </p>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Rating (1-5 stars) *
+                </label>
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setReleaseForm({ ...releaseForm, rating: star })}
+                      className={`text-2xl transition-all ${
+                        releaseForm.rating >= star
+                          ? 'text-yellow-400'
+                          : 'text-slate-500 hover:text-slate-400'
+                      }`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+                {releaseForm.rating > 0 && (
+                  <p className="text-xs text-slate-400 mt-1">{releaseForm.rating} star{releaseForm.rating !== 1 ? 's' : ''} selected</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Feedback *
+                </label>
+                <textarea
+                  value={releaseForm.feedback}
+                  onChange={(e) => setReleaseForm({ ...releaseForm, feedback: e.target.value })}
+                  placeholder="Share your experience with this milestone..."
+                  className="w-full glass-card text-white rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 placeholder-slate-400 text-sm resize-none"
+                  rows={4}
+                />
+              </div>
+            </div>
+
+            <div className="flex space-x-2 pt-4">
+              <button
+                onClick={handleReleaseMilestone}
+                disabled={updatingMilestone === releaseForm.milestoneId || !releaseForm.feedback.trim() || releaseForm.rating < 1}
+                className="flex-1 bg-primary text-primary-foreground px-4 py-2 rounded-full font-semibold hover:bg-primary/90 transition-colors text-sm shadow-glow-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {updatingMilestone === releaseForm.milestoneId ? (
+                  <>
+                    <FontAwesomeIcon icon={faSpinner} className="animate-spin mr-2" />
+                    Releasing...
+                  </>
+                ) : (
+                  'Release Milestone'
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  setShowReleaseModal(false)
+                  setReleaseForm({ milestoneId: '', feedback: '', rating: 0 })
+                }}
+                disabled={updatingMilestone === releaseForm.milestoneId}
+                className="flex-1 glass-card text-white px-4 py-2 rounded-full font-semibold hover:bg-white/15 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

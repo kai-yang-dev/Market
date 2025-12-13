@@ -357,6 +357,8 @@ export interface Milestone {
   description: string
   balance: number
   status: string
+  feedback?: string
+  rating?: number
   clientId: string
   providerId: string
   createdAt: string

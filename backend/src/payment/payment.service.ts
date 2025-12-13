@@ -426,9 +426,14 @@ export class PaymentService {
         throw new BadRequestException('Only the provider can accept this payment');
       }
 
+      // Calculate 2% transaction fee
+      const transactionAmount = Number(transaction.amount);
+      const transactionFee = transactionAmount * 0.02; // 2% fee
+      const providerAmount = transactionAmount - transactionFee; // 98% to provider
+
       // Update transaction status to SUCCESS
       transaction.status = TransactionStatus.SUCCESS;
-      transaction.description = `Milestone payment received`;
+      transaction.description = `Milestone payment received (2% fee: ${transactionFee.toFixed(2)} USDT)`;
       await queryRunner.manager.save(transaction);
 
       // Get or create provider balance
@@ -444,9 +449,44 @@ export class PaymentService {
         providerBalance = await queryRunner.manager.save(providerBalance);
       }
 
-      // Update provider balance
-      providerBalance.amount = Number(providerBalance.amount) + Number(transaction.amount);
+      // Update provider balance with 98% of transaction amount
+      providerBalance.amount = Number(providerBalance.amount) + providerAmount;
       await queryRunner.manager.save(providerBalance);
+
+      // Find admin user and add 2% fee to admin balance
+      const adminUser = await queryRunner.manager.findOne(User, {
+        where: { role: 'admin' },
+      });
+
+      if (adminUser) {
+        let adminBalance = await queryRunner.manager.findOne(Balance, {
+          where: { userId: adminUser.id },
+        });
+
+        if (!adminBalance) {
+          adminBalance = queryRunner.manager.create(Balance, {
+            userId: adminUser.id,
+            amount: 0,
+          });
+        }
+
+        // Add 2% transaction fee to admin balance
+        adminBalance.amount = Number(adminBalance.amount) + transactionFee;
+        await queryRunner.manager.save(adminBalance);
+
+        // Create transaction record for the 2% platform fee
+        const platformFeeTransaction = queryRunner.manager.create(Transaction, {
+          clientId: transaction.clientId,
+          providerId: transaction.providerId,
+          milestoneId: transaction.milestoneId,
+          type: TransactionType.PLATFORM_FEE,
+          status: TransactionStatus.SUCCESS,
+          amount: transactionFee,
+          platformFee: transactionFee,
+          description: `Platform fee (2%) from milestone payment of ${transactionAmount.toFixed(2)} USDT`,
+        });
+        await queryRunner.manager.save(platformFeeTransaction);
+      }
 
       await queryRunner.commitTransaction();
 
@@ -488,12 +528,17 @@ export class PaymentService {
         { transactionId: transaction.id, milestoneId: transaction.milestoneId, amount: transaction.amount, conversationId: conversation?.id },
       );
 
+      // Calculate amounts for notification (same calculation as above)
+      const notificationTransactionAmount = Number(transaction.amount);
+      const notificationFee = notificationTransactionAmount * 0.02;
+      const notificationProviderAmount = notificationTransactionAmount - notificationFee;
+
       await this.notificationService.createNotification(
         transaction.providerId!,
         NotificationType.MILESTONE_UPDATED,
         'Payment Accepted',
-        `You accepted and received ${Number(transaction.amount).toFixed(2)} USDT for milestone "${milestoneTitle}".`,
-        { transactionId: transaction.id, milestoneId: transaction.milestoneId, amount: transaction.amount, conversationId: conversation?.id },
+        `You accepted and received ${notificationProviderAmount.toFixed(2)} USDT for milestone "${milestoneTitle}" (2% platform fee: ${notificationFee.toFixed(2)} USDT).`,
+        { transactionId: transaction.id, milestoneId: transaction.milestoneId, amount: notificationProviderAmount, conversationId: conversation?.id },
       );
 
       return transaction;
