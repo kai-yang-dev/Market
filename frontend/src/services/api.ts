@@ -136,6 +136,21 @@ export interface Service {
   tags?: Tag[];
   createdAt: string;
   updatedAt: string;
+  totalMilestones?: number;
+  completedMilestones?: number;
+  averageRating?: number;
+  feedbackCount?: number;
+  feedbacks?: Array<{
+    id: string;
+    title: string;
+    feedback: string;
+    rating: number;
+    client: { id: string; firstName?: string; lastName?: string; userName?: string };
+    createdAt: string;
+  }>;
+  feedbacksHasMore?: boolean;
+  feedbacksPage?: number;
+  feedbacksLimit?: number;
 }
 
 export interface CreateServiceData {
@@ -302,8 +317,11 @@ export const serviceApi = {
     return response.data;
   },
 
-  getById: async (id: string): Promise<Service> => {
-    const response = await api.get(`/services/${id}`);
+  getById: async (id: string, feedbackPage?: number, feedbackLimit?: number): Promise<Service> => {
+    const params: any = {};
+    if (feedbackPage !== undefined) params.feedbackPage = feedbackPage;
+    if (feedbackLimit !== undefined) params.feedbackLimit = feedbackLimit;
+    const response = await api.get(`/services/${id}`, { params });
     return response.data;
   },
 
@@ -389,6 +407,8 @@ export interface Milestone {
   attachedFiles?: string[];
   balance: number;
   status: 'draft' | 'processing' | 'canceled' | 'completed' | 'withdraw' | 'released' | 'dispute';
+  feedback?: string;
+  rating?: number;
   client?: {
     id: string;
     firstName?: string;
@@ -655,8 +675,8 @@ export const milestoneApi = {
     return response.data;
   },
 
-  release: async (id: string): Promise<Milestone> => {
-    const response = await api.patch(`/milestones/${id}/release`);
+  release: async (id: string, data: { feedback: string; rating: number }): Promise<Milestone> => {
+    const response = await api.patch(`/milestones/${id}/release`, data);
     return response.data;
   },
 

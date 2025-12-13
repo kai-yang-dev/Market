@@ -55,6 +55,12 @@ export class Milestone extends BaseEntity {
   })
   status: MilestoneStatus;
 
+  @Column({ type: 'text', nullable: true })
+  feedback?: string;
+
+  @Column({ type: 'int', nullable: true })
+  rating?: number;
+
   @DeleteDateColumn({ name: 'deleted_at', nullable: true })
   deletedAt?: Date;
 }

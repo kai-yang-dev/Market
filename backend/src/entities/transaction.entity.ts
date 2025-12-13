@@ -8,6 +8,7 @@ export enum TransactionType {
   CHARGE = 'charge',
   WITHDRAW = 'withdraw',
   MILESTONE_PAYMENT = 'milestone_payment',
+  PLATFORM_FEE = 'platform_fee',
 }
 
 export enum TransactionStatus {
