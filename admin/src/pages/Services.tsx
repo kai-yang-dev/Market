@@ -14,6 +14,7 @@ import {
 import { faStar as faStarRegular, faStarHalfStroke } from '@fortawesome/free-regular-svg-icons'
 import { serviceApi, categoryApi, Service, Category } from '../services/api'
 import { renderIcon } from '../utils/iconHelper'
+import ImageWithLoader from '../components/ImageWithLoader'
 
 const StarRating = ({ rating }: { rating: number }) => {
   const fullStars = Math.floor(rating)
@@ -335,23 +336,13 @@ function Services() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="w-16 h-16 rounded-lg overflow-hidden relative">
                           {service.adImage ? (
-                            <>
-                              {/* Blurred background */}
-                              <div
-                                className="absolute inset-0 bg-cover bg-center filter blur-sm scale-110"
-                                style={{
-                                  backgroundImage: `url(http://localhost:3000${service.adImage})`,
-                                }}
-                              />
-                              {/* Actual image on top */}
-                              <div className="relative h-full flex items-center justify-center">
-                                <img
-                                  src={`http://localhost:3000${service.adImage}`}
-                                  alt={service.title}
-                                  className="max-w-full max-h-full object-contain"
-                                />
-                              </div>
-                            </>
+                            <ImageWithLoader
+                              src={service.adImage}
+                              alt={service.title}
+                              className="max-w-full max-h-full object-contain"
+                              containerClassName="w-full h-full"
+                              showBlurBackground={true}
+                            />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-gray-700 text-2xl">📦</div>
                           )}

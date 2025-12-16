@@ -10,7 +10,6 @@ import {
   faCheck,
   faCheckDouble,
   faTimes,
-  faBan,
   faCheckCircle,
   faMoneyBillWave,
   faGavel,
@@ -18,6 +17,13 @@ import {
   faSmile,
   faPaperclip,
   faStar,
+  faDownload,
+  faFile,
+  faImage,
+  faFilePdf,
+  faFileWord,
+  faFileExcel,
+  faFileArchive,
 } from '@fortawesome/free-solid-svg-icons'
 import { conversationApi, messageApi, milestoneApi, paymentApi, Conversation, Message, Milestone, Transaction } from '../services/api'
 import { useAppSelector } from '../store/hooks'
@@ -59,12 +65,22 @@ function Chat() {
   const typingTimeoutRef = useRef<number | null>(null)
   const emojiPickerRef = useRef<HTMLDivElement>(null)
   const markReadTimeoutRef = useRef<number | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const messagesAreaRef = useRef<HTMLDivElement>(null)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [uploadingFiles, setUploadingFiles] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const [previewFile, setPreviewFile] = useState<{ url: string; name: string; type: string } | null>(null)
+  const [hasMoreMessages, setHasMoreMessages] = useState(true)
+  const [loadingMoreMessages, setLoadingMoreMessages] = useState(false)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (id) {
       fetchConversation()
-      fetchMessages()
+      fetchMessages(50) // Load latest 50 messages
       fetchMilestones()
+      setHasMoreMessages(true) // Reset hasMore when conversation changes
     }
   }, [id])
 
@@ -155,7 +171,7 @@ function Chat() {
         
         // Refresh milestones and messages
         fetchMilestones()
-        fetchMessages()
+        fetchMessages(50)
         
         // Scroll to show the success card
         setTimeout(() => {
@@ -262,7 +278,10 @@ function Chat() {
   }, [id, user?.id])
 
   useEffect(() => {
-    scrollToBottom()
+    // Only auto-scroll if we're not loading older messages and user is near bottom
+    if (!loadingMoreMessages) {
+      scrollToBottom()
+    }
     // Mark messages as read when new messages arrive or when viewing
     markMessagesAsRead()
   }, [messages, milestones, pendingPayments, successfulPayments])
@@ -382,8 +401,123 @@ function Chat() {
     }
   }
 
+  // File handling functions
+  const handleFileSelect = (files: FileList | null) => {
+    if (!files || files.length === 0) return
+
+    const fileArray = Array.from(files)
+    // Limit to 10 files and 50MB per file
+    const validFiles = fileArray.filter((file) => {
+      if (file.size > 50 * 1024 * 1024) {
+        showToast.error(`File ${file.name} is too large. Maximum size is 50MB.`)
+        return false
+      }
+      return true
+    }).slice(0, 10 - selectedFiles.length)
+
+    if (validFiles.length < fileArray.length) {
+      showToast.error(`Only ${validFiles.length} file(s) added. Maximum 10 files allowed.`)
+    }
+
+    setSelectedFiles((prev) => [...prev, ...validFiles])
+  }
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleFileSelect(e.target.files)
+    // Reset input so same file can be selected again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const removeFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+
+    const files = e.dataTransfer.files
+    if (files.length > 0) {
+      handleFileSelect(files)
+    }
+  }
+
+  const getFileIcon = (fileName: string) => {
+    const extension = fileName.split('.').pop()?.toLowerCase()
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(extension || '')) {
+      return faImage
+    } else if (extension === 'pdf') {
+      return faFilePdf
+    } else if (['doc', 'docx'].includes(extension || '')) {
+      return faFileWord
+    } else if (['xls', 'xlsx'].includes(extension || '')) {
+      return faFileExcel
+    } else if (['zip', 'rar', '7z', 'tar', 'gz'].includes(extension || '')) {
+      return faFileArchive
+    }
+    return faFile
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
+  }
+
+  const handleDownloadFile = (url: string, fileName: string) => {
+    const link = document.createElement('a')
+    link.href = url
+    link.download = fileName
+    link.target = '_blank'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const handlePreviewFile = (url: string, fileName: string) => {
+    const extension = fileName.split('.').pop()?.toLowerCase() || ''
+    const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(extension)
+    const isPdf = extension === 'pdf'
+    const isVideo = ['mp4', 'webm', 'ogg', 'mov', 'avi'].includes(extension)
+    const isAudio = ['mp3', 'wav', 'ogg', 'aac', 'm4a'].includes(extension)
+    
+    setPreviewFile({
+      url,
+      name: fileName,
+      type: isImage ? 'image' : isPdf ? 'pdf' : isVideo ? 'video' : isAudio ? 'audio' : 'other',
+    })
+  }
+
+  const closePreview = () => {
+    setPreviewFile(null)
+  }
+
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (messagesEndRef.current && messagesAreaRef.current) {
+      const container = messagesAreaRef.current
+      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100
+      // Only auto-scroll if user is near bottom
+      if (isNearBottom || messages.length <= 50) {
+        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
+      }
+    }
   }
 
   const fetchConversation = async () => {
@@ -399,13 +533,49 @@ function Chat() {
     }
   }
 
-  const fetchMessages = async () => {
+  const fetchMessages = async (limit: number = 50, before?: string) => {
     try {
-      const data = await messageApi.getByConversation(id!)
-      setMessages(data)
+      const data = await messageApi.getByConversation(id!, limit, before)
+      if (before) {
+        // Loading older messages - prepend to existing messages and preserve scroll position
+        const container = messagesAreaRef.current
+        const previousScrollHeight = container?.scrollHeight || 0
+        setMessages((prev) => [...data.messages, ...prev])
+        setHasMoreMessages(data.hasMore)
+        // Restore scroll position after new messages are rendered
+        setTimeout(() => {
+          if (container) {
+            const newScrollHeight = container.scrollHeight
+            container.scrollTop = newScrollHeight - previousScrollHeight
+          }
+        }, 0)
+      } else {
+        // Initial load or refresh - replace messages
+        setMessages(data.messages)
+        setHasMoreMessages(data.hasMore)
+        // Scroll to bottom after initial load
+        setTimeout(() => {
+          scrollToBottom()
+        }, 100)
+      }
     } catch (error) {
       console.error('Failed to fetch messages:', error)
       showToast.error('Failed to load messages')
+    }
+  }
+
+  const loadMoreMessages = async () => {
+    if (loadingMoreMessages || !hasMoreMessages || messages.length === 0) return
+
+    try {
+      setLoadingMoreMessages(true)
+      const oldestMessage = messages[0]
+      await fetchMessages(50, oldestMessage.id)
+    } catch (error) {
+      console.error('Failed to load more messages:', error)
+      showToast.error('Failed to load more messages')
+    } finally {
+      setLoadingMoreMessages(false)
     }
   }
 
@@ -447,33 +617,58 @@ function Chat() {
   }
 
   const handleSendMessage = async () => {
-    if (!messageText.trim() || !id) return
+    if ((!messageText.trim() && selectedFiles.length === 0) || !id) return
 
     try {
       setSending(true)
+      setUploadingFiles(true)
+
+      let attachmentFiles: string[] = []
+
+      // Upload files if any
+      if (selectedFiles.length > 0) {
+        try {
+          const uploadResult = await messageApi.uploadFiles(selectedFiles)
+          attachmentFiles = uploadResult.urls
+        } catch (error: any) {
+          console.error('Failed to upload files:', error)
+          showToast.error(error.response?.data?.message || 'Failed to upload files. Please try again.')
+          setSending(false)
+          setUploadingFiles(false)
+          return
+        }
+      }
+
+      // Send message with attachments
+      const messageContent = messageText.trim() || (attachmentFiles.length > 0 ? '📎 Sent file(s)' : '')
 
       // Try WebSocket first, fallback to HTTP API
       if (socketRef.current && socketRef.current.connected) {
         socketRef.current.emit('send_message', {
           conversationId: id,
-          message: messageText.trim(),
+          message: messageContent,
+          attachmentFiles: attachmentFiles.length > 0 ? attachmentFiles : undefined,
         })
         setMessageText('')
+        setSelectedFiles([])
         // Message will be added via WebSocket 'new_message' event
-        setTimeout(() => {
-          fetchMessages()
-        }, 500)
+        // Don't refetch all messages, just let WebSocket handle it
       } else {
         // Fallback to HTTP API if WebSocket not available
-        await messageApi.create(id, messageText.trim())
+        await messageApi.create(id, messageContent, attachmentFiles.length > 0 ? attachmentFiles : undefined)
         setMessageText('')
-        await fetchMessages()
+        setSelectedFiles([])
+        // Refresh messages to get the new one
+        const data = await messageApi.getByConversation(id!, 50)
+        setMessages(data.messages)
+        setHasMoreMessages(data.hasMore)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to send message:', error)
-      showToast.error('Failed to send message. Please try again.')
+      showToast.error(error.response?.data?.message || 'Failed to send message. Please try again.')
     } finally {
       setSending(false)
+      setUploadingFiles(false)
     }
   }
 
@@ -496,7 +691,7 @@ function Chat() {
       setMilestoneForm({ title: '', description: '', balance: '' })
       setShowMilestoneForm(false)
       await fetchMilestones()
-      await fetchMessages()
+      await fetchMessages(50)
       
       // Emit milestone update via WebSocket
       if (socketRef.current) {
@@ -548,7 +743,7 @@ function Chat() {
           break
       }
       await fetchMilestones()
-      await fetchMessages()
+      await fetchMessages(50)
       // Emit milestone update via WebSocket
       if (socketRef.current) {
         socketRef.current.emit('milestone_updated', { conversationId: id })
@@ -587,7 +782,7 @@ function Chat() {
       setShowReleaseModal(false)
       setReleaseForm({ milestoneId: '', feedback: '', rating: 0 })
       await fetchMilestones()
-      await fetchMessages()
+      await fetchMessages(50)
       // Emit milestone update via WebSocket
       if (socketRef.current) {
         socketRef.current.emit('milestone_updated', { conversationId: id })
@@ -619,7 +814,7 @@ function Chat() {
       
       // Refresh milestones and messages
       await fetchMilestones()
-      await fetchMessages()
+      await fetchMessages(50)
       
       // Notify Layout to refresh balance (provider's balance increased)
       window.dispatchEvent(new CustomEvent('balance-updated'))
@@ -792,8 +987,48 @@ function Chat() {
             </div>
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto relative min-h-0">
-              <div className="relative p-4 space-y-1">
+            <div
+              ref={messagesAreaRef}
+              className="flex-1 overflow-y-auto relative min-h-0"
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onScroll={(e) => {
+                const target = e.currentTarget
+                // Load more when scrolled to top (within 100px)
+                if (target.scrollTop < 100 && hasMoreMessages && !loadingMoreMessages) {
+                  loadMoreMessages()
+                }
+              }}
+            >
+              {/* Drag Overlay */}
+              {isDragging && messagesAreaRef.current && (() => {
+                const rect = messagesAreaRef.current!.getBoundingClientRect()
+                return (
+                  <div
+                    className="fixed bg-primary/20 border-2 border-dashed border-primary rounded-lg flex items-center justify-center z-50 pointer-events-none"
+                    style={{
+                      top: `${rect.top}px`,
+                      left: `${rect.left}px`,
+                      width: `${rect.width}px`,
+                      height: `${rect.height}px`,
+                    }}
+                  >
+                    <div className="text-center">
+                      <FontAwesomeIcon icon={faPaperclip} className="text-6xl text-primary mb-4" />
+                      <p className="text-primary font-semibold text-xl">Drop files here to upload</p>
+                      <p className="text-primary/80 text-sm mt-2">Release to add files to your message</p>
+                    </div>
+                  </div>
+                )
+              })()}
+              <div className="relative p-4 space-y-1" ref={messagesContainerRef}>
+                {/* Loading indicator for older messages */}
+                {loadingMoreMessages && (
+                  <div className="flex justify-center py-4">
+                    <FontAwesomeIcon icon={faSpinner} className="animate-spin text-primary text-xl" />
+                  </div>
+                )}
                 {(() => {
                   // Combine messages, milestones, pending payments, and successful payments, sorted by creation time
                   const pendingPaymentItems = Array.from(pendingPayments.entries()).map(([milestoneId, payment]) => {
@@ -867,7 +1102,230 @@ function Chat() {
                                   : 'glass-card text-white rounded-tl-sm'
                                   } shadow-sm`}
                               >
-                                <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message.message}</p>
+                                {message.message && (
+                                  <p className="text-sm leading-relaxed whitespace-pre-wrap break-words mb-2">{message.message}</p>
+                                )}
+
+                                {/* File Attachments */}
+                                {message.attachmentFiles && message.attachmentFiles.length > 0 && (
+                                  <div className="space-y-3 mb-2">
+                                    {message.attachmentFiles.map((fileUrl, index) => {
+                                      const fileName = fileUrl.split('/').pop() || `file-${index + 1}`
+                                      const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(fileName)
+                                      const isPdf = /\.pdf$/i.test(fileName)
+                                      const isVideo = /\.(mp4|webm|ogg|mov|avi)$/i.test(fileName)
+                                      const isAudio = /\.(mp3|wav|ogg|aac|m4a)$/i.test(fileName)
+                                      
+                                      return (
+                                        <div key={index} className="space-y-1">
+                                          {/* Image Preview - Telegram Style */}
+                                          {isImage && (
+                                            <div
+                                              className="cursor-pointer group relative overflow-hidden rounded-lg -mx-1"
+                                              onClick={() => handlePreviewFile(fileUrl, fileName)}
+                                            >
+                                              <img
+                                                src={fileUrl}
+                                                alt={fileName}
+                                                className="w-full max-w-md object-cover rounded-lg transition-transform group-hover:scale-[1.02]"
+                                                style={{ maxHeight: '400px' }}
+                                              />
+                                              {/* Overlay with download button on hover */}
+                                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    handleDownloadFile(fileUrl, fileName)
+                                                  }}
+                                                  className={`p-2 rounded-full backdrop-blur-sm ${
+                                                    isOwn ? 'bg-primary-foreground/80 text-primary' : 'bg-white/80 text-primary'
+                                                  } hover:scale-110 transition-transform`}
+                                                  title="Download"
+                                                >
+                                                  <FontAwesomeIcon icon={faDownload} />
+                                                </button>
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {/* Video Preview */}
+                                          {isVideo && (
+                                            <div className="rounded-lg overflow-hidden border border-white/10">
+                                              <div
+                                                className="relative cursor-pointer group"
+                                                onClick={() => handlePreviewFile(fileUrl, fileName)}
+                                              >
+                                                <video
+                                                  src={fileUrl}
+                                                  className="max-w-full max-h-64 object-contain rounded-t-lg"
+                                                  preload="metadata"
+                                                />
+                                                <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
+                                                  <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                                    <FontAwesomeIcon icon={faCheckCircle} className="text-white text-2xl" />
+                                                  </div>
+                                                </div>
+                                              </div>
+                                              <div className="flex items-center justify-between px-2 py-1.5 bg-black/30">
+                                                <p className={`text-xs truncate flex-1 ${isOwn ? 'text-primary-foreground/80' : 'text-white/80'}`}>
+                                                  {fileName}
+                                                </p>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    handleDownloadFile(fileUrl, fileName)
+                                                  }}
+                                                  className={`flex-shrink-0 p-1 rounded hover:bg-white/20 transition-colors ml-2 ${
+                                                    isOwn ? 'text-primary-foreground' : 'text-primary'
+                                                  }`}
+                                                  title="Download"
+                                                >
+                                                  <FontAwesomeIcon icon={faDownload} className="text-xs" />
+                                                </button>
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {/* Audio Preview */}
+                                          {isAudio && (
+                                            <div
+                                              className={`p-3 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors ${
+                                                isOwn ? 'bg-primary-foreground/10' : 'bg-white/5'
+                                              }`}
+                                              onClick={() => handlePreviewFile(fileUrl, fileName)}
+                                            >
+                                              <div className="flex items-center gap-3 mb-2">
+                                                <FontAwesomeIcon
+                                                  icon={getFileIcon(fileName)}
+                                                  className={`text-2xl ${isOwn ? 'text-primary-foreground' : 'text-primary'}`}
+                                                />
+                                                <div className="flex-1 min-w-0">
+                                                  <p className={`text-sm font-medium truncate ${isOwn ? 'text-primary-foreground' : 'text-white'}`}>
+                                                    {fileName}
+                                                  </p>
+                                                </div>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    handleDownloadFile(fileUrl, fileName)
+                                                  }}
+                                                  className={`flex-shrink-0 p-1.5 rounded hover:bg-white/20 transition-colors ${
+                                                    isOwn ? 'text-primary-foreground' : 'text-primary'
+                                                  }`}
+                                                  title="Download"
+                                                >
+                                                  <FontAwesomeIcon icon={faDownload} className="text-sm" />
+                                                </button>
+                                              </div>
+                                              <audio
+                                                src={fileUrl}
+                                                controls
+                                                className="w-full"
+                                                onClick={(e) => e.stopPropagation()}
+                                              >
+                                                Your browser does not support the audio tag.
+                                              </audio>
+                                            </div>
+                                          )}
+
+                                          {/* PDF Preview - Slack Style */}
+                                          {isPdf && (
+                                            <div
+                                              className="rounded-lg overflow-hidden border border-white/10 cursor-pointer group hover:border-primary/50 transition-all -mx-1"
+                                              onClick={() => handlePreviewFile(fileUrl, fileName)}
+                                            >
+                                              {/* Header with file info */}
+                                              <div className={`px-3 py-2.5 flex items-center gap-3 ${isOwn ? 'bg-primary-foreground/5' : 'bg-white/5'}`}>
+                                                <FontAwesomeIcon
+                                                  icon={getFileIcon(fileName)}
+                                                  className={`text-lg flex-shrink-0 ${isOwn ? 'text-primary-foreground' : 'text-primary'}`}
+                                                />
+                                                <div className="flex-1 min-w-0">
+                                                  <p className={`text-sm font-medium truncate ${isOwn ? 'text-primary-foreground' : 'text-white'}`}>
+                                                    {fileName}
+                                                  </p>
+                                                </div>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    handleDownloadFile(fileUrl, fileName)
+                                                  }}
+                                                  className={`flex-shrink-0 p-1.5 rounded hover:bg-white/20 transition-colors opacity-0 group-hover:opacity-100 ${
+                                                    isOwn ? 'text-primary-foreground' : 'text-primary'
+                                                  }`}
+                                                  title="Download"
+                                                >
+                                                  <FontAwesomeIcon icon={faDownload} className="text-sm" />
+                                                </button>
+                                              </div>
+                                              
+                                              {/* PDF Preview - Full Stretch */}
+                                              <div className="relative bg-slate-900/50 w-full">
+                                                <div className="w-full" style={{ minHeight: '400px', maxHeight: '600px' }}>
+                                                  <iframe
+                                                    src={`${fileUrl}#page=1&zoom=50`}
+                                                    className="w-full h-full pointer-events-none"
+                                                    title={fileName}
+                                                    style={{ 
+                                                      minHeight: '400px',
+                                                      maxHeight: '600px',
+                                                      height: '500px'
+                                                    }}
+                                                  />
+                                                </div>
+                                                {/* Overlay on hover */}
+                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                                  <div className={`px-4 py-2 rounded-full backdrop-blur-sm ${
+                                                    isOwn ? 'bg-primary-foreground/80 text-primary' : 'bg-white/80 text-primary'
+                                                  }`}>
+                                                    <span className="text-sm font-medium">Click to view full PDF</span>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {/* Other Files Preview */}
+                                          {!isImage && !isVideo && !isAudio && !isPdf && (
+                                            <div
+                                              className={`flex items-center gap-3 p-3 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors ${
+                                                isOwn ? 'bg-primary-foreground/10' : 'bg-white/5'
+                                              }`}
+                                              onClick={() => handlePreviewFile(fileUrl, fileName)}
+                                            >
+                                              <div className="flex-shrink-0">
+                                                <FontAwesomeIcon
+                                                  icon={getFileIcon(fileName)}
+                                                  className={`text-2xl ${isOwn ? 'text-primary-foreground' : 'text-primary'}`}
+                                                />
+                                              </div>
+                                              <div className="flex-1 min-w-0">
+                                                <p className={`text-sm font-medium truncate ${isOwn ? 'text-primary-foreground' : 'text-white'}`}>
+                                                  {fileName}
+                                                </p>
+                                                <p className={`text-xs ${isOwn ? 'text-primary-foreground/70' : 'text-slate-400'}`}>
+                                                  Click to preview or download
+                                                </p>
+                                              </div>
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation()
+                                                  handleDownloadFile(fileUrl, fileName)
+                                                }}
+                                                className={`flex-shrink-0 p-1.5 rounded hover:bg-white/20 transition-colors ${
+                                                  isOwn ? 'text-primary-foreground' : 'text-primary'
+                                                }`}
+                                                title="Download"
+                                              >
+                                                <FontAwesomeIcon icon={faDownload} className="text-sm" />
+                                              </button>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                )}
 
                                 {/* Timestamp and Read Status */}
                                 <div className={`flex items-center gap-1 mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
@@ -1103,9 +1561,46 @@ function Chat() {
             </div>
 
             {/* Input Area */}
-            <div className="glass-card border-t border-white/10 px-4 py-3 flex-shrink-0">
+            <div className="glass-card border-t border-white/10 px-4 py-3 flex-shrink-0 relative">
+              {/* Selected Files Preview */}
+              {selectedFiles.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {selectedFiles.map((file, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-2 px-2 py-1.5 glass-card rounded-lg text-sm"
+                    >
+                      <FontAwesomeIcon
+                        icon={getFileIcon(file.name)}
+                        className="text-primary text-xs"
+                      />
+                      <span className="text-white text-xs truncate max-w-[150px]">{file.name}</span>
+                      <span className="text-slate-400 text-xs">{formatFileSize(file.size)}</span>
+                      <button
+                        onClick={() => removeFile(index)}
+                        className="text-slate-400 hover:text-red-400 transition-colors ml-1"
+                      >
+                        <FontAwesomeIcon icon={faTimes} className="text-xs" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="flex items-end gap-2">
-                <button className="text-slate-400 hover:text-primary transition-colors p-2 flex-shrink-0">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  onChange={handleFileInputChange}
+                  className="hidden"
+                  accept="*/*"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-slate-400 hover:text-primary transition-colors p-2 flex-shrink-0"
+                  title="Attach files"
+                >
                   <FontAwesomeIcon icon={faPaperclip} />
                 </button>
                 <div className="flex-1 relative">
@@ -1124,7 +1619,7 @@ function Chat() {
                         handleTyping()
                       }
                     }}
-                    placeholder="Type a message..."
+                    placeholder={selectedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
                     rows={1}
                     className="w-full glass-card text-white rounded-2xl px-4 py-2.5 pr-12 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 resize-none max-h-32 overflow-y-auto placeholder-slate-400 text-sm leading-5"
                     style={{ minHeight: '42px', maxHeight: '128px' }}
@@ -1158,13 +1653,13 @@ function Chat() {
                 </div>
                 <button
                   onClick={handleSendMessage}
-                  disabled={!messageText.trim() || sending}
-                  className={`p-2.5 rounded-full flex-shrink-0 transition-all ${messageText.trim()
+                  disabled={(!messageText.trim() && selectedFiles.length === 0) || sending || uploadingFiles}
+                  className={`p-2.5 rounded-full flex-shrink-0 transition-all ${(messageText.trim() || selectedFiles.length > 0)
                     ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-glow-primary'
                     : 'glass-card text-slate-400 cursor-not-allowed'
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
-                  {sending ? (
+                  {(sending || uploadingFiles) ? (
                     <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
                   ) : (
                     <FontAwesomeIcon icon={faPaperPlane} />
@@ -1176,8 +1671,8 @@ function Chat() {
 
           {/* Milestones Sidebar */}
           <div className="w-80 glass-card border-l border-white/10 flex flex-col flex-shrink-0 min-h-0">
-            <div className="p-4 border-b border-white/10 flex-shrink-0">
-              <div className="flex items-center justify-between mb-4">
+            <div className="p-4 border-b border-white/10 flex-shrink-0 h-[64px]">
+              <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-white">Milestones</h3>
                 {isClient && (
                   <button
@@ -1482,6 +1977,113 @@ function Chat() {
         </div>
         )
       })()}
+
+      {/* File Preview Modal */}
+      {previewFile && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={closePreview}
+        >
+          <div
+            className="glass-card rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-white/10">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <FontAwesomeIcon
+                  icon={getFileIcon(previewFile.name)}
+                  className="text-primary text-xl flex-shrink-0"
+                />
+                <h3 className="text-white font-semibold truncate">{previewFile.name}</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleDownloadFile(previewFile.url, previewFile.name)}
+                  className="text-slate-400 hover:text-primary transition-colors p-2"
+                  title="Download"
+                >
+                  <FontAwesomeIcon icon={faDownload} />
+                </button>
+                <button
+                  onClick={closePreview}
+                  className="text-slate-400 hover:text-red-400 transition-colors p-2"
+                  title="Close"
+                >
+                  <FontAwesomeIcon icon={faTimes} />
+                </button>
+              </div>
+            </div>
+
+            {/* Preview Content */}
+            <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-black/20">
+              {previewFile.type === 'image' && (
+                <img
+                  src={previewFile.url}
+                  alt={previewFile.name}
+                  className="max-w-full max-h-[70vh] object-contain rounded-lg"
+                  onClick={() => window.open(previewFile.url, '_blank')}
+                />
+              )}
+
+              {previewFile.type === 'pdf' && (
+                <iframe
+                  src={previewFile.url}
+                  className="w-full h-[70vh] rounded-lg"
+                  title={previewFile.name}
+                />
+              )}
+
+              {previewFile.type === 'video' && (
+                <video
+                  src={previewFile.url}
+                  controls
+                  className="max-w-full max-h-[70vh] rounded-lg"
+                >
+                  Your browser does not support the video tag.
+                </video>
+              )}
+
+              {previewFile.type === 'audio' && (
+                <div className="w-full max-w-md">
+                  <div className="text-center mb-4">
+                    <FontAwesomeIcon
+                      icon={getFileIcon(previewFile.name)}
+                      className="text-primary text-6xl mb-4"
+                    />
+                    <p className="text-white font-semibold">{previewFile.name}</p>
+                  </div>
+                  <audio
+                    src={previewFile.url}
+                    controls
+                    className="w-full"
+                  >
+                    Your browser does not support the audio tag.
+                  </audio>
+                </div>
+              )}
+
+              {previewFile.type === 'other' && (
+                <div className="text-center">
+                  <FontAwesomeIcon
+                    icon={getFileIcon(previewFile.name)}
+                    className="text-primary text-6xl mb-4"
+                  />
+                  <p className="text-white font-semibold mb-2">{previewFile.name}</p>
+                  <p className="text-slate-400 text-sm mb-4">Preview not available for this file type</p>
+                  <button
+                    onClick={() => handleDownloadFile(previewFile.url, previewFile.name)}
+                    className="bg-primary text-primary-foreground px-6 py-2 rounded-full font-semibold hover:bg-primary/90 transition-colors flex items-center gap-2 mx-auto"
+                  >
+                    <FontAwesomeIcon icon={faDownload} />
+                    Download File
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

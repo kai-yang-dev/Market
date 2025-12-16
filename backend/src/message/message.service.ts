@@ -95,7 +95,13 @@ export class MessageService {
     return messageWithSender;
   }
 
-  async findAll(conversationId: string, userId: string, isAdmin: boolean = false): Promise<Message[]> {
+  async findAll(
+    conversationId: string,
+    userId: string,
+    isAdmin: boolean = false,
+    limit: number = 50,
+    before?: string,
+  ): Promise<{ messages: Message[]; hasMore: boolean }> {
     // Verify conversation exists and user has access
     const conversation = await this.conversationRepository.findOne({
       where: { id: conversationId, deletedAt: null },
@@ -109,11 +115,35 @@ export class MessageService {
       throw new ForbiddenException('You do not have access to this conversation');
     }
 
-    return this.messageRepository.find({
-      where: { conversationId, deletedAt: null },
-      relations: ['sender'],
-      order: { createdAt: 'ASC' },
-    });
+    const queryBuilder = this.messageRepository
+      .createQueryBuilder('message')
+      .where('message.conversationId = :conversationId', { conversationId })
+      .andWhere('message.deletedAt IS NULL')
+      .leftJoinAndSelect('message.sender', 'sender')
+      .orderBy('message.createdAt', 'DESC')
+      .take(limit + 1); // Fetch one extra to check if there are more
+
+    // If before is provided, fetch messages before that message
+    if (before) {
+      const beforeMessage = await this.messageRepository.findOne({
+        where: { id: before },
+      });
+      if (beforeMessage) {
+        queryBuilder.andWhere('message.createdAt < :beforeDate', {
+          beforeDate: beforeMessage.createdAt,
+        });
+      }
+    }
+
+    const messages = await queryBuilder.getMany();
+    const hasMore = messages.length > limit;
+    const resultMessages = hasMore ? messages.slice(0, limit) : messages;
+
+    // Reverse to get chronological order (oldest to newest)
+    return {
+      messages: resultMessages.reverse(),
+      hasMore,
+    };
   }
 
   async findOne(id: string): Promise<Message> {

@@ -15,31 +15,27 @@ import {
   MaxFileSizeValidator,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { memoryStorage } from 'multer';
 import { ServiceService } from './service.service';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../admin/guards/admin.guard';
 import { ServiceStatus } from '../entities/service.entity';
+import { StorageService } from '../storage/storage.service';
 
 @Controller('services')
 export class ServiceController {
-  constructor(private readonly serviceService: ServiceService) {}
+  constructor(
+    private readonly serviceService: ServiceService,
+    private readonly storageService: StorageService,
+  ) {}
 
   @Post()
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FileInterceptor('adImage', {
-      storage: diskStorage({
-        destination: './uploads/services',
-        filename: (req, file, cb) => {
-          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-          const ext = extname(file.originalname);
-          cb(null, `service-${uniqueSuffix}${ext}`);
-        },
-      }),
+      storage: memoryStorage(),
       fileFilter: (req, file, cb) => {
         const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
         if (!allowedMimeTypes.includes(file.mimetype)) {
@@ -64,8 +60,9 @@ export class ServiceController {
     )
     file: Express.Multer.File,
   ) {
-    const adImagePath = `/uploads/services/${file.filename}`;
-    return this.serviceService.create(req.user.id, createServiceDto, adImagePath);
+    // Upload to Backblaze B2
+    const adImageUrl = await this.storageService.uploadFile(file, 'services');
+    return this.serviceService.create(req.user.id, createServiceDto, adImageUrl);
   }
 
   @Get()
@@ -111,14 +108,7 @@ export class ServiceController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FileInterceptor('adImage', {
-      storage: diskStorage({
-        destination: './uploads/services',
-        filename: (req, file, cb) => {
-          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-          const ext = extname(file.originalname);
-          cb(null, `service-${uniqueSuffix}${ext}`);
-        },
-      }),
+      storage: memoryStorage(),
       fileFilter: (req, file, cb) => {
         const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
         if (!allowedMimeTypes.includes(file.mimetype)) {
@@ -137,8 +127,12 @@ export class ServiceController {
     @Body() updateServiceDto: UpdateServiceDto,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    const adImagePath = file ? `/uploads/services/${file.filename}` : undefined;
-    return this.serviceService.update(id, req.user.id, updateServiceDto, adImagePath);
+    let adImageUrl: string | undefined;
+    if (file) {
+      // Upload to Backblaze B2
+      adImageUrl = await this.storageService.uploadFile(file, 'services');
+    }
+    return this.serviceService.update(id, req.user.id, updateServiceDto, adImageUrl);
   }
 
   @Delete(':id')
