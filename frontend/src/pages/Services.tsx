@@ -6,6 +6,7 @@ import { faStar as faStarRegular, faStarHalfStroke } from '@fortawesome/free-reg
 import { useAppSelector } from '../store/hooks'
 import { categoryApi, serviceApi, Service, Category } from '../services/api'
 import { renderIcon } from '../utils/iconHelper'
+import ImageWithLoader from '../components/ImageWithLoader'
 
 type ViewMode = 'card' | 'table'
 
@@ -251,23 +252,15 @@ function Services() {
                   >
                     <div className="h-48 relative overflow-hidden">
                       {service.adImage ? (
-                        <>
-                          {/* Blurred background */}
-                          <div
-                            className="absolute inset-0 bg-cover bg-center filter blur-md scale-110"
-                            style={{
-                              backgroundImage: `url(${service.adImage})`,
-                            }}
+                        <div className="relative h-full flex items-center justify-center">
+                          <ImageWithLoader
+                            src={service.adImage}
+                            alt={service.title}
+                            className="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                            containerClassName="w-full h-full"
+                            showBlurBackground={true}
                           />
-                          {/* Actual image on top */}
-                          <div className="relative h-full flex items-center justify-center">
-                            <img
-                              src={`${service.adImage}`}
-                              alt={service.title}
-                              className="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform duration-300"
-                            />
-                          </div>
-                        </>
+                        </div>
                       ) : (
                         <div className="h-full flex items-center justify-center bg-gradient-to-br from-blue-900 to-purple-900">
                           <div className="text-6xl text-blue-400">📦</div>
@@ -358,23 +351,13 @@ function Services() {
                             <Link to={`/services/${service.id}`}>
                               <div className="w-16 h-16 rounded-lg overflow-hidden relative">
                                 {service.adImage ? (
-                                  <>
-                                    {/* Blurred background */}
-                                    <div
-                                      className="absolute inset-0 bg-cover bg-center filter blur-sm scale-110"
-                                      style={{
-                                        backgroundImage: `url(${service.adImage})`,
-                                      }}
-                                    />
-                                    {/* Actual image on top */}
-                                    <div className="relative h-full flex items-center justify-center">
-                                      <img
-                                        src={`${service.adImage}`}
-                                        alt={service.title}
-                                        className="max-w-full max-h-full object-contain"
-                                      />
-                                    </div>
-                                  </>
+                                  <ImageWithLoader
+                                    src={service.adImage}
+                                    alt={service.title}
+                                    className="max-w-full max-h-full object-contain"
+                                    containerClassName="w-full h-full"
+                                    showBlurBackground={true}
+                                  />
                                 ) : (
                                   <div className="w-full h-full flex items-center justify-center bg-gray-700 text-2xl">📦</div>
                                 )}

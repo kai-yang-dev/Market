@@ -5,6 +5,7 @@ import { faStar, faArrowLeft, faSpinner, faUser, faComments, faCheckCircle, faCl
 import { faStar as faStarRegular, faStarHalfStroke } from '@fortawesome/free-regular-svg-icons'
 import { serviceApi, Service, conversationApi, Conversation } from '../services/api'
 import { useAppSelector } from '../store/hooks'
+import ImageWithLoader from '../components/ImageWithLoader'
 
 const StarRating = ({ rating }: { rating: number }) => {
   const fullStars = Math.floor(rating)
@@ -199,23 +200,15 @@ function ServiceDetail() {
             {/* Left Side - Image */}
             <div className="relative rounded-lg overflow-hidden min-h-[400px]">
               {service.adImage ? (
-                <>
-                  {/* Blurred background */}
-                  <div
-                    className="absolute inset-0 bg-cover bg-center filter blur-xl scale-110"
-                    style={{
-                      backgroundImage: `url(${service.adImage})`,
-                    }}
+                <div className="relative h-full min-h-[400px] flex items-center justify-center p-8">
+                  <ImageWithLoader
+                    src={service.adImage}
+                    alt={service.title}
+                    className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                    containerClassName="w-full h-full"
+                    showBlurBackground={true}
                   />
-                  {/* Actual image on top */}
-                  <div className="relative h-full flex items-center justify-center p-8">
-                    <img
-                      src={`${service.adImage}`}
-                      alt={service.title}
-                      className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-                    />
-                  </div>
-                </>
+                </div>
               ) : (
                 <div className="h-full min-h-[400px] flex items-center justify-center bg-gray-700">
                   <div className="text-9xl text-gray-500">📦</div>

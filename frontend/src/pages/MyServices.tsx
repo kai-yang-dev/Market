@@ -6,6 +6,7 @@ import { faStar as faStarRegular, faStarHalfStroke } from '@fortawesome/free-reg
 import { useAppSelector } from '../store/hooks'
 import { categoryApi, serviceApi, Service, Category } from '../services/api'
 import { renderIcon } from '../utils/iconHelper'
+import ImageWithLoader from '../components/ImageWithLoader'
 
 const StarRating = ({ rating }: { rating: number }) => {
   const fullStars = Math.floor(rating)
@@ -259,23 +260,13 @@ function MyServices() {
                 >
                   <div className="h-48 relative overflow-hidden">
                     {service.adImage ? (
-                      <>
-                        {/* Blurred background */}
-                        <div
-                          className="absolute inset-0 bg-cover bg-center filter blur-md scale-110"
-                          style={{
-                            backgroundImage: `url(${service.adImage})`,
-                          }}
-                        />
-                        {/* Actual image on top */}
-                        <div className="relative h-full flex items-center justify-center">
-                          <img
-                            src={`${service.adImage}`}
-                            alt={service.title}
-                            className="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform duration-300"
-                          />
-                        </div>
-                      </>
+                      <ImageWithLoader
+                        src={service.adImage}
+                        alt={service.title}
+                        className="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                        containerClassName="w-full h-full"
+                        showBlurBackground={true}
+                      />
                     ) : (
                       <div className="h-full flex items-center justify-center bg-gradient-to-br from-blue-900 to-purple-900">
                         <div className="text-6xl text-blue-400">📦</div>
