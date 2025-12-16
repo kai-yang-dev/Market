@@ -2,6 +2,9 @@ import { io, Socket } from 'socket.io-client';
 
 let socket: Socket | null = null;
 
+// Get socket URL from environment variable
+const SOCKET_BASE_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
+
 export const getSocket = (): Socket | null => {
   const token = localStorage.getItem('accessToken');
   
@@ -11,10 +14,8 @@ export const getSocket = (): Socket | null => {
   }
 
   if (!socket || !socket.connected) {
-    // Use the full URL with namespace - Socket.IO will handle the /socket.io path automatically
-    const socketUrl = window.location.hostname === 'localhost' 
-      ? 'http://localhost:3000/chat'
-      : `${window.location.protocol}//${window.location.host}/chat`;
+    // Use environment variable for socket URL with /chat namespace
+    const socketUrl = `${SOCKET_BASE_URL}/chat`;
     
     console.log('Connecting to Socket.IO server:', socketUrl);
     

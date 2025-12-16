@@ -1,9 +1,9 @@
 import axios, { AxiosError } from 'axios';
 import { showToast } from '../utils/toast';
 
-// Use proxy path in development (Vite will proxy /api to backend)
-// In production, update this to your backend URL
-const API_BASE_URL = '/api';
+// Use environment variable for API URL
+// Set VITE_API_URL in .env file (e.g., http://localhost:3000/api or https://your-backend.railway.app/api)
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
