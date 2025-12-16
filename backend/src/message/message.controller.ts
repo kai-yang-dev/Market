@@ -1,11 +1,17 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, Request, UseInterceptors, UploadedFiles, BadRequestException, Query } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { MessageService } from './message.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { StorageService } from '../storage/storage.service';
 
 @Controller('messages')
 export class MessageController {
-  constructor(private readonly messageService: MessageService) {}
+  constructor(
+    private readonly messageService: MessageService,
+    private readonly storageService: StorageService,
+  ) {}
 
   @Post('conversation/:conversationId')
   @UseGuards(JwtAuthGuard)
@@ -20,15 +26,54 @@ export class MessageController {
 
   @Get('conversation/:conversationId')
   @UseGuards(JwtAuthGuard)
-  async findAll(@Param('conversationId') conversationId: string, @Request() req) {
+  async findAll(
+    @Param('conversationId') conversationId: string,
+    @Request() req,
+    @Query('limit') limit?: string,
+    @Query('before') before?: string,
+  ) {
     const isAdmin = req.user.role === 'admin';
-    return this.messageService.findAll(conversationId, req.user.id, isAdmin);
+    const limitNum = limit ? parseInt(limit, 10) : 50;
+    return this.messageService.findAll(conversationId, req.user.id, isAdmin, limitNum, before);
   }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   async findOne(@Param('id') id: string) {
     return this.messageService.findOne(id);
+  }
+
+  @Post('upload')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+    FilesInterceptor('files', 10, {
+      storage: memoryStorage(),
+      limits: {
+        fileSize: 50 * 1024 * 1024, // 50MB per file
+      },
+    }),
+  )
+  async uploadFiles(@UploadedFiles() files: Express.Multer.File[]) {
+    if (!files || files.length === 0) {
+      throw new BadRequestException('No files provided');
+    }
+
+    try {
+      // Upload all files to Backblaze B2 in 'chat' folder
+      const fileUrls = await this.storageService.uploadFiles(files, 'chat');
+      
+      return {
+        urls: fileUrls,
+        files: files.map((file, index) => ({
+          url: fileUrls[index],
+          name: file.originalname,
+          size: file.size,
+          type: file.mimetype,
+        })),
+      };
+    } catch (error) {
+      throw new BadRequestException(`Failed to upload files: ${error.message}`);
+    }
   }
 }
 

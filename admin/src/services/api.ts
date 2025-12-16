@@ -358,6 +358,7 @@ export interface Message {
   conversationId: string
   senderId: string
   message: string
+  attachmentFiles?: string[]
   sender?: {
     id: string
     firstName?: string
@@ -390,8 +391,11 @@ export const conversationApi = {
 }
 
 export const messageApi = {
-  getByConversation: async (conversationId: string): Promise<Message[]> => {
-    const response = await api.get(`/messages/conversation/${conversationId}`)
+  getByConversation: async (conversationId: string, limit?: number, before?: string): Promise<{ messages: Message[]; hasMore: boolean }> => {
+    const params: any = {}
+    if (limit !== undefined) params.limit = limit
+    if (before) params.before = before
+    const response = await api.get(`/messages/conversation/${conversationId}`, { params })
     return response.data
   },
   create: async (conversationId: string, message: string): Promise<Message> => {

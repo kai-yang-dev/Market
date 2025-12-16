@@ -659,13 +659,30 @@ export const messageApi = {
     return response.data;
   },
 
-  getByConversation: async (conversationId: string): Promise<Message[]> => {
-    const response = await api.get(`/messages/conversation/${conversationId}`);
+  getByConversation: async (conversationId: string, limit?: number, before?: string): Promise<{ messages: Message[]; hasMore: boolean }> => {
+    const params: any = {};
+    if (limit !== undefined) params.limit = limit;
+    if (before) params.before = before;
+    const response = await api.get(`/messages/conversation/${conversationId}`, { params });
     return response.data;
   },
 
   getById: async (id: string): Promise<Message> => {
     const response = await api.get(`/messages/${id}`);
+    return response.data;
+  },
+
+  uploadFiles: async (files: File[]): Promise<{ urls: string[]; files: Array<{ url: string; name: string; size: number; type: string }> }> => {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('files', file);
+    });
+
+    const response = await api.post('/messages/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response.data;
   },
 };
