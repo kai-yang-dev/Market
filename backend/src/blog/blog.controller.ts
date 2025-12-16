@@ -15,8 +15,7 @@ import {
   MaxFileSizeValidator,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { memoryStorage } from 'multer';
 import { BlogService } from './blog.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
@@ -24,23 +23,20 @@ import { CreateCommentDto } from './dto/create-comment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../admin/guards/admin.guard';
 import { PostStatus } from '../entities/post.entity';
+import { StorageService } from '../storage/storage.service';
 
 @Controller('blog')
 export class BlogController {
-  constructor(private readonly blogService: BlogService) {}
+  constructor(
+    private readonly blogService: BlogService,
+    private readonly storageService: StorageService,
+  ) {}
 
   @Post()
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FilesInterceptor('images', 10, {
-      storage: diskStorage({
-        destination: './uploads/posts',
-        filename: (req, file, cb) => {
-          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-          const ext = extname(file.originalname);
-          cb(null, `post-${uniqueSuffix}${ext}`);
-        },
-      }),
+      storage: memoryStorage(),
       fileFilter: (req, file, cb) => {
         const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
         if (!allowedMimeTypes.includes(file.mimetype)) {
@@ -58,10 +54,14 @@ export class BlogController {
     @Body() createPostDto: CreatePostDto,
     @UploadedFiles() files?: Express.Multer.File[],
   ) {
-    const imagePaths = files?.map((file) => `/uploads/posts/${file.filename}`) || [];
+    let imageUrls: string[] = [];
+    if (files && files.length > 0) {
+      // Upload all files to Backblaze B2
+      imageUrls = await this.storageService.uploadFiles(files, 'posts');
+    }
     return this.blogService.create(req.user.id, {
       ...createPostDto,
-      images: imagePaths,
+      images: imageUrls,
     });
   }
 
@@ -87,14 +87,7 @@ export class BlogController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FilesInterceptor('images', 10, {
-      storage: diskStorage({
-        destination: './uploads/posts',
-        filename: (req, file, cb) => {
-          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-          const ext = extname(file.originalname);
-          cb(null, `post-${uniqueSuffix}${ext}`);
-        },
-      }),
+      storage: memoryStorage(),
       fileFilter: (req, file, cb) => {
         const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
         if (!allowedMimeTypes.includes(file.mimetype)) {
@@ -114,8 +107,9 @@ export class BlogController {
     @UploadedFiles() files?: Express.Multer.File[],
   ) {
     if (files && files.length > 0) {
-      const imagePaths = files.map((file) => `/uploads/posts/${file.filename}`);
-      updatePostDto.images = imagePaths;
+      // Upload all files to Backblaze B2
+      const imageUrls = await this.storageService.uploadFiles(files, 'posts');
+      updatePostDto.images = imageUrls;
     }
     return this.blogService.update(id, req.user.id, updatePostDto);
   }

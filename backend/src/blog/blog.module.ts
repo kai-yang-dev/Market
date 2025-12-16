@@ -6,9 +6,13 @@ import { Post } from '../entities/post.entity';
 import { PostLike } from '../entities/post-like.entity';
 import { PostComment } from '../entities/post-comment.entity';
 import { PostCommentLike } from '../entities/post-comment-like.entity';
+import { StorageModule } from '../storage/storage.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Post, PostLike, PostComment, PostCommentLike])],
+  imports: [
+    TypeOrmModule.forFeature([Post, PostLike, PostComment, PostCommentLike]),
+    StorageModule,
+  ],
   controllers: [BlogController],
   providers: [BlogService],
   exports: [BlogService],

@@ -340,13 +340,13 @@ function Services() {
                               <div
                                 className="absolute inset-0 bg-cover bg-center filter blur-sm scale-110"
                                 style={{
-                                  backgroundImage: `url(http://localhost:3000${service.adImage})`,
+                                  backgroundImage: `url(${service.adImage})`,
                                 }}
                               />
                               {/* Actual image on top */}
                               <div className="relative h-full flex items-center justify-center">
                                 <img
-                                  src={`http://localhost:3000${service.adImage}`}
+                                  src={`${service.adImage}`}
                                   alt={service.title}
                                   className="max-w-full max-h-full object-contain"
                                 />
