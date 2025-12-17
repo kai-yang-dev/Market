@@ -9,7 +9,7 @@ import { AppModule } from './app.module';
 // Helper function to get allowed CORS origins
 function getAllowedOrigins(): string[] {
   return process.env.CORS_ORIGINS
-    ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim())
+    ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim().replace(/\/$/, '')) // Remove trailing slashes
     : ['http://localhost:5173', 'http://localhost:5174'];
 }
 
@@ -51,6 +51,8 @@ async function bootstrap() {
   app.enableCors({
     origin: getAllowedOrigins(),
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
   });
 
   const port = process.env.PORT || 3000;
