@@ -3,8 +3,9 @@ import { IsString, IsNotEmpty, Length, Matches, IsIn, MinLength } from 'class-va
 export class EnableTwoFactorDto {
   @IsString()
   @IsNotEmpty()
-  @IsIn(['totp', 'sms', 'email'])
-  method: 'totp' | 'sms' | 'email';
+  // SMS phone verification disabled - removed 'sms' from allowed methods
+  @IsIn(['totp', /* 'sms', */ 'email'])
+  method: 'totp' | /* 'sms' | */ 'email';
 }
 
 export class VerifyTwoFactorSetupDto {

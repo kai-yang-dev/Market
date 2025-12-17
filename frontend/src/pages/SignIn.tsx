@@ -19,7 +19,8 @@ function SignIn() {
   const [requires2FA, setRequires2FA] = useState(false);
   const [tempToken, setTempToken] = useState<string | null>(null);
   const [twoFactorCode, setTwoFactorCode] = useState('');
-  const [twoFactorMethod, setTwoFactorMethod] = useState<'totp' | 'sms' | 'email'>('totp');
+  // SMS phone verification disabled - removed 'sms' from method type
+  const [twoFactorMethod, setTwoFactorMethod] = useState<'totp' | /* 'sms' | */ 'email'>('totp');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -165,7 +165,12 @@ function SignUp() {
 
     try {
       await authApi.signUpStep5(userId, step5Data);
-      setCurrentStep(6);
+      // SMS phone verification disabled - skip steps 6 and 7, complete registration directly
+      // setCurrentStep(6);
+      // Complete registration without phone verification
+      const response = await authApi.signUpStep7(userId, { verificationCode: '000000' });
+      dispatch(setCredentials({ user: response.user, accessToken: response.accessToken }));
+      navigate('/');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to save address');
     } finally {
@@ -173,6 +178,7 @@ function SignUp() {
     }
   };
 
+  /* SMS phone verification disabled - handleStep6 commented out
   const handleStep6 = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userId) return;
@@ -189,7 +195,9 @@ function SignUp() {
       setLoading(false);
     }
   };
+  */
 
+  /* SMS phone verification disabled - handleStep7 commented out
   const handleStep7 = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userId) return;
@@ -207,6 +215,7 @@ function SignUp() {
       setLoading(false);
     }
   };
+  */
 
   const renderStep = () => {
     switch (currentStep) {
@@ -473,6 +482,7 @@ function SignUp() {
           </form>
         );
 
+      /* SMS phone verification disabled - Step 6 commented out
       case 6:
         return (
           <form onSubmit={handleStep6} className="space-y-6">
@@ -550,7 +560,9 @@ function SignUp() {
             </button>
           </form>
         );
+      */
 
+      /* SMS phone verification disabled - Step 7 commented out
       case 7:
         return (
           <form onSubmit={handleStep7} className="space-y-4">
@@ -587,20 +599,22 @@ function SignUp() {
             </button>
           </form>
         );
+      */
 
       default:
         return null;
     }
   };
 
+  // SMS phone verification disabled - removed steps 6 and 7
   const steps = [
     { number: 1, title: 'Account' },
     { number: 2, title: 'Verify' },
     { number: 3, title: 'Confirmed' },
     { number: 4, title: 'Profile' },
-    { number: 5, title: 'Address' },
-    { number: 6, title: 'Phone' },
-    { number: 7, title: 'Complete' },
+    { number: 5, title: 'Complete' }, // Changed from 'Address' - now final step
+    // { number: 6, title: 'Phone' },    // SMS phone verification disabled
+    // { number: 7, title: 'Complete' }, // SMS phone verification disabled
   ];
 
   return (

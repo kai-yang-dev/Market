@@ -6,7 +6,7 @@ import * as QRCode from 'qrcode';
 import * as bcrypt from 'bcrypt';
 import { User } from '../entities/user.entity';
 import { EmailService } from './email.service';
-import { SmsService } from './sms.service';
+// import { SmsService } from './sms.service'; // SMS phone verification disabled
 
 @Injectable()
 export class TwoFactorService {
@@ -17,7 +17,7 @@ export class TwoFactorService {
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private emailService: EmailService,
-    private smsService: SmsService,
+    // private smsService: SmsService, // SMS phone verification disabled
   ) {}
 
   /**
@@ -109,8 +109,9 @@ export class TwoFactorService {
       return verified;
     }
 
-    // If SMS or Email method, verify stored code
-    if (user.twoFactorMethod === 'sms' || user.twoFactorMethod === 'email') {
+    // SMS phone verification disabled - removed 'sms' from condition
+    // If Email method, verify stored code
+    if (/* user.twoFactorMethod === 'sms' || */ user.twoFactorMethod === 'email') {
       const storedCode = this.verificationCodes.get(userId);
       if (!storedCode) {
         return false;
@@ -168,9 +169,11 @@ export class TwoFactorService {
     return false;
   }
 
+  /* SMS phone verification disabled - sendSmsCode method commented out
   /**
    * Send SMS verification code
    */
+  /*
   async sendSmsCode(userId: string): Promise<void> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user || !user.phoneNumber || !user.phoneVerified) {
@@ -186,6 +189,7 @@ export class TwoFactorService {
     
     await this.smsService.sendVerificationCode(user.phoneNumber, code);
   }
+  */
 
   /**
    * Send Email verification code

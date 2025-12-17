@@ -75,10 +75,12 @@ export interface SignUpStep5Data {
   country: string;
 }
 
-export interface SignUpStep6Data {
-  phoneNumber: string;
-}
+// SMS phone verification disabled - SignUpStep6Data commented out
+// export interface SignUpStep6Data {
+//   phoneNumber: string;
+// }
 
+// SMS phone verification disabled - SignUpStep7Data kept for internal use
 export interface SignUpStep7Data {
   verificationCode: string;
 }
@@ -190,11 +192,13 @@ export const authApi = {
     return response.data;
   },
 
-  signUpStep6: async (userId: string, data: SignUpStep6Data) => {
-    const response = await api.post(`/auth/signup/step6/${userId}`, data);
-    return response.data;
-  },
+  // SMS phone verification disabled - signUpStep6 commented out
+  // signUpStep6: async (userId: string, data: SignUpStep6Data) => {
+  //   const response = await api.post(`/auth/signup/step6/${userId}`, data);
+  //   return response.data;
+  // },
 
+  // SMS phone verification disabled - signUpStep7 kept for internal use (bypasses verification)
   signUpStep7: async (userId: string, data: SignUpStep7Data) => {
     const response = await api.post(`/auth/signup/step7/${userId}`, data);
     return response.data;
@@ -224,7 +228,8 @@ export const authApi = {
   },
 
   twoFactor: {
-    enable: async (method: 'totp' | 'sms' | 'email') => {
+    // SMS phone verification disabled - removed 'sms' from method options
+    enable: async (method: 'totp' | /* 'sms' | */ 'email') => {
       const response = await api.post('/auth/2fa/enable', { method });
       return response.data;
     },

@@ -20,7 +20,7 @@ import {
 import { SignInDto } from './dto/sign-in.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { EmailService } from './email.service';
-import { SmsService } from './sms.service';
+// import { SmsService } from './sms.service'; // SMS phone verification disabled
 import { TwoFactorService } from './two-factor.service';
 import { ReferralService } from '../referral/referral.service';
 
@@ -35,7 +35,7 @@ export class AuthService {
     private userRepository: Repository<User>,
     private jwtService: JwtService,
     private emailService: EmailService,
-    private smsService: SmsService,
+    // private smsService: SmsService, // SMS phone verification disabled
     private twoFactorService: TwoFactorService,
     private referralService: ReferralService,
   ) {}
@@ -238,8 +238,9 @@ export class AuthService {
     // Store verification code in memory (key: userId)
     this.phoneVerificationCodes.set(userId, { code: verificationCode, expires: expiresAt });
 
-    // Send SMS verification code
-    await this.smsService.sendVerificationCode(dto.phoneNumber, verificationCode);
+    // SMS phone verification disabled - Send SMS verification code
+    // await this.smsService.sendVerificationCode(dto.phoneNumber, verificationCode);
+    console.log(`[DEV MODE] Phone verification code for ${dto.phoneNumber}: ${verificationCode}`);
 
     return {
       message: 'Verification code sent to your phone',
@@ -259,22 +260,24 @@ export class AuthService {
     // Get verification code from memory
     const storedCode = this.phoneVerificationCodes.get(userId);
 
-    if (!storedCode) {
-      throw new BadRequestException('No verification code found. Please request a new one.');
-    }
+    // SMS phone verification disabled - bypass code validation
+    // If no stored code exists (SMS disabled), skip verification and complete registration
+    if (storedCode) {
+      // Original SMS verification logic (commented out - SMS disabled)
+      // if (new Date() > storedCode.expires) {
+      //   this.phoneVerificationCodes.delete(userId);
+      //   throw new BadRequestException('Verification code expired. Please request a new one.');
+      // }
 
-    if (new Date() > storedCode.expires) {
+      // if (storedCode.code !== dto.verificationCode) {
+      //   throw new BadRequestException('Invalid verification code');
+      // }
+
+      // Code is valid, remove it from memory
       this.phoneVerificationCodes.delete(userId);
-      throw new BadRequestException('Verification code expired. Please request a new one.');
     }
-
-    if (storedCode.code !== dto.verificationCode) {
-      throw new BadRequestException('Invalid verification code');
-    }
-
-    // Code is valid, remove it from memory and verify phone
-    this.phoneVerificationCodes.delete(userId);
-    user.phoneVerified = true;
+    // SMS phone verification disabled - auto-mark phone as verified
+    // user.phoneVerified = true;
 
     await this.userRepository.save(user);
 
@@ -283,7 +286,7 @@ export class AuthService {
     const accessToken = this.jwtService.sign(payload);
 
     return {
-      message: 'Phone verified successfully. Registration complete!',
+      message: 'Registration complete!', // SMS phone verification disabled - changed message
       accessToken,
       user: {
         id: user.id,

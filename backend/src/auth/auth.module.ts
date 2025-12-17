@@ -5,7 +5,7 @@ import { PassportModule } from '@nestjs/passport';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { EmailService } from './email.service';
-import { SmsService } from './sms.service';
+// import { SmsService } from './sms.service'; // SMS phone verification disabled
 import { TwoFactorService } from './two-factor.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { User } from '../entities/user.entity';
@@ -22,7 +22,7 @@ import { ReferralModule } from '../referral/referral.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, EmailService, SmsService, TwoFactorService, JwtStrategy],
+  providers: [AuthService, EmailService, /* SmsService, */ TwoFactorService, JwtStrategy], // SMS phone verification disabled
   exports: [AuthService, TwoFactorService],
 })
 export class AuthModule {}

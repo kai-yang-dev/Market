@@ -53,6 +53,7 @@
     "socket.io-client": "^4.8.1",
     "speakeasy": "^2.0.0",
     "tronweb": "^6.1.0",
+    "twilio": "^5.10.7",
     "typeorm": "^0.3.17",
     "uuid": "^13.0.0"
   },
