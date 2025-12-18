@@ -123,7 +123,7 @@ function Home() {
 
           <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight mb-6 leading-tight">
             <span className="block text-white">
-              Anyone can sell
+              {isAuthenticated ? `Welcome back, ${user?.firstName || 'User'}!` : 'Anyone can sell'}
             </span>
             <span className="block mt-2">
               <span className="text-slate-300">anything and </span>
@@ -357,60 +357,6 @@ function Home() {
               ))}
             </div>
           )}
-        </div>
-      </section>
-
-      {/* Final CTA Section */}
-      <section className="py-24 border-t border-white/5 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/10 via-primary/5 to-transparent"></div>
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="max-w-4xl mx-auto text-center glass-card p-12 md:p-16 rounded-3xl border border-primary/20">
-            <h2 className="text-4xl md:text-6xl font-bold mb-6">
-              <span className="text-white">Ready to Get </span>
-              <span className="text-gradient-primary">Started?</span>
-            </h2>
-            <p className="text-xl md:text-2xl text-slate-400 mb-10 max-w-2xl mx-auto">
-              Join OmniMart today and start buying or selling anything you can imagine. 
-              No limits. No boundaries. Just endless possibilities.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              {!isAuthenticated ? (
-                <>
-                  <Link
-                    to="/signup"
-                    className="px-10 py-5 bg-primary text-primary-foreground rounded-full font-bold hover:bg-primary/90 shadow-glow-primary hover:shadow-glow-primary-lg hover:-translate-y-1 transition-all flex items-center justify-center space-x-2 text-lg"
-                  >
-                    <span>Create Free Account</span>
-                    <FontAwesomeIcon icon={faArrowRight} />
-                  </Link>
-                  <Link
-                    to="/services"
-                    className="px-10 py-5 glass-card border-2 border-primary/50 text-white rounded-full font-semibold hover:bg-primary/10 hover:border-primary transition-all flex items-center justify-center space-x-2 text-lg"
-                  >
-                    <span>Explore Marketplace</span>
-                    <FontAwesomeIcon icon={faStore} />
-                  </Link>
-                </>
-              ) : (
-                <>
-                  <Link
-                    to="/services/new"
-                    className="px-10 py-5 bg-primary text-primary-foreground rounded-full font-bold hover:bg-primary/90 shadow-glow-primary hover:shadow-glow-primary-lg hover:-translate-y-1 transition-all flex items-center justify-center space-x-2 text-lg"
-                  >
-                    <span>List Your First Item</span>
-                    <FontAwesomeIcon icon={faArrowRight} />
-                  </Link>
-                  <Link
-                    to="/services"
-                    className="px-10 py-5 glass-card border-2 border-primary/50 text-white rounded-full font-semibold hover:bg-primary/10 hover:border-primary transition-all flex items-center justify-center space-x-2 text-lg"
-                  >
-                    <span>Browse Listings</span>
-                    <FontAwesomeIcon icon={faStore} />
-                  </Link>
-                </>
-              )}
-            </div>
-          </div>
         </div>
       </section>
     </div>

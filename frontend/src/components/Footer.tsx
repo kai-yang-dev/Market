@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faFacebook, faTwitter, faLinkedin, faInstagram, faGithub } from '@fortawesome/free-brands-svg-icons'
+import { useAppSelector } from '../store/hooks'
 
 function Footer() {
   const currentYear = new Date().getFullYear()
+  const { isAuthenticated } = useAppSelector((state) => state.auth)
 
   return (
     <footer className="border-t border-white/5 bg-black/20 backdrop-blur-sm mt-auto">
@@ -63,53 +65,57 @@ function Footer() {
           </div>
 
           {/* Quick Links */}
-          <div>
-            <h3 className="font-bold text-white text-sm mb-4">Quick Links</h3>
-            <ul className="space-y-2">
-              <li>
-                <Link to="/" className="text-sm text-slate-400 hover:text-primary transition-colors">
-                  Home
-                </Link>
-              </li>
-              <li>
-                <Link to="/services" className="text-sm text-slate-400 hover:text-primary transition-colors">
-                  All Services
-                </Link>
-              </li>
-              <li>
-                <Link to="/feed" className="text-sm text-slate-400 hover:text-primary transition-colors">
-                  Feed
-                </Link>
-              </li>
-              <li>
-                <Link to="/profile" className="text-sm text-slate-400 hover:text-primary transition-colors">
-                  Profile
-                </Link>
-              </li>
-            </ul>
-          </div>
+          {isAuthenticated && (
+            <div>
+              <h3 className="font-bold text-white text-sm mb-4">Quick Links</h3>
+              <ul className="space-y-2">
+                <li>
+                  <Link to="/" className="text-sm text-slate-400 hover:text-primary transition-colors">
+                    Home
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/services" className="text-sm text-slate-400 hover:text-primary transition-colors">
+                    All Services
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/feed" className="text-sm text-slate-400 hover:text-primary transition-colors">
+                    Feed
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/profile" className="text-sm text-slate-400 hover:text-primary transition-colors">
+                    Profile
+                  </Link>
+                </li>
+              </ul>
+            </div>
+          )}
 
           {/* Services */}
-          <div>
-            <h3 className="font-bold text-white text-sm mb-4">Services</h3>
-            <ul className="space-y-2">
-              <li>
-                <Link to="/services" className="text-sm text-slate-400 hover:text-primary transition-colors">
-                  Browse Services
-                </Link>
-              </li>
-              <li>
-                <Link to="/services/new" className="text-sm text-slate-400 hover:text-primary transition-colors">
-                  Create Service
-                </Link>
-              </li>
-              <li>
-                <Link to="/my-services" className="text-sm text-slate-400 hover:text-primary transition-colors">
-                  My Services
-                </Link>
-              </li>
-            </ul>
-          </div>
+          {isAuthenticated && (
+            <div>
+              <h3 className="font-bold text-white text-sm mb-4">Services</h3>
+              <ul className="space-y-2">
+                <li>
+                  <Link to="/services" className="text-sm text-slate-400 hover:text-primary transition-colors">
+                    Browse Services
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/services/new" className="text-sm text-slate-400 hover:text-primary transition-colors">
+                    Create Service
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/my-services" className="text-sm text-slate-400 hover:text-primary transition-colors">
+                    My Services
+                  </Link>
+                </li>
+              </ul>
+            </div>
+          )}
 
           {/* Support */}
           <div>
