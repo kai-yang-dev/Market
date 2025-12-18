@@ -300,47 +300,43 @@ function Layout({ children }: LayoutProps) {
               </Link>
               
               {/* Navigation Links - Desktop */}
-              <div className="hidden lg:flex items-center gap-8">
-                <Link to="/" className="text-sm font-medium transition-colors text-white">
-                  Home
-                </Link>
-                <Link to="/feed" className="text-sm font-medium transition-colors text-slate-400 hover:text-white">
-                  Feed
-                </Link>
-                {isAuthenticated && (
-                  <>
-                    <Link to="/chat" className="text-sm font-medium transition-colors text-slate-400 hover:text-white">
-                      Chat
-                    </Link>
-                    <Link to="/referral" className="text-sm font-medium transition-colors text-slate-400 hover:text-white">
-                      Referral
-                    </Link>
-                  </>
-                )}
-                <div 
-                  className="relative group" 
-                  ref={servicesDropdownRef}
-                  onMouseEnter={() => setServicesDropdownOpen(true)}
-                  onMouseLeave={() => setServicesDropdownOpen(false)}
-                >
-                  <button
-                    className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1"
+              {isAuthenticated && user && (
+                <div className="hidden lg:flex items-center gap-8">
+                  <Link to="/" className="text-sm font-medium transition-colors text-white">
+                    Home
+                  </Link>
+                  <Link to="/feed" className="text-sm font-medium transition-colors text-slate-400 hover:text-white">
+                    Feed
+                  </Link>
+                  <Link to="/chat" className="text-sm font-medium transition-colors text-slate-400 hover:text-white">
+                    Chat
+                  </Link>
+                  <Link to="/referral" className="text-sm font-medium transition-colors text-slate-400 hover:text-white">
+                    Referral
+                  </Link>
+                  <div 
+                    className="relative group" 
+                    ref={servicesDropdownRef}
+                    onMouseEnter={() => setServicesDropdownOpen(true)}
+                    onMouseLeave={() => setServicesDropdownOpen(false)}
                   >
-                    Services
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
-                    </svg>
-                  </button>
-                  <div className={`absolute top-full right-0 mt-2 w-48 transition-all duration-200 ${servicesDropdownOpen ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
-                    <div className="backdrop-blur-xl bg-[rgba(13,17,28,0.9)] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-                      <Link
-                        to="/services"
-                        onClick={() => setServicesDropdownOpen(false)}
-                        className="block px-4 py-3 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
-                      >
-                        All Services
-                      </Link>
-                      {isAuthenticated && (
+                    <button
+                      className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1"
+                    >
+                      Services
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                      </svg>
+                    </button>
+                    <div className={`absolute top-full right-0 mt-2 w-48 transition-all duration-200 ${servicesDropdownOpen ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
+                      <div className="backdrop-blur-xl bg-[rgba(13,17,28,0.9)] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+                        <Link
+                          to="/services"
+                          onClick={() => setServicesDropdownOpen(false)}
+                          className="block px-4 py-3 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+                        >
+                          All Services
+                        </Link>
                         <Link
                           to="/my-services"
                           onClick={() => setServicesDropdownOpen(false)}
@@ -348,11 +344,11 @@ function Layout({ children }: LayoutProps) {
                         >
                           My Services
                         </Link>
-                      )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Right Side Actions */}
               <div className="flex items-center gap-4">
@@ -461,13 +457,13 @@ function Layout({ children }: LayoutProps) {
                   <>
                     <Link 
                       to="/signin" 
-                      className="hidden md:block text-sm font-medium text-white hover:text-primary transition-colors"
+                      className="text-sm font-medium text-white hover:text-primary transition-colors"
                     >
                       Log In
                     </Link>
                     <Link
                       to="/signup"
-                      className="hidden md:inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_30px_rgba(16,185,129,0.4)] hover:shadow-[0_0_50px_rgba(16,185,129,0.6)] hover:-translate-y-1 h-9 rounded-full px-4"
+                      className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_30px_rgba(16,185,129,0.4)] hover:shadow-[0_0_50px_rgba(16,185,129,0.6)] hover:-translate-y-1 h-9 rounded-full px-4"
                     >
                       Sign Up
                     </Link>
@@ -475,20 +471,22 @@ function Layout({ children }: LayoutProps) {
                 )}
                 
                 {/* Mobile Menu Button */}
-                <button
-                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                  className="lg:hidden p-2 text-slate-400 hover:text-white transition-colors"
-                  aria-label="Toggle menu"
-                >
-                  <FontAwesomeIcon icon={faBars} />
-                </button>
+                {isAuthenticated && user && (
+                  <button
+                    onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                    className="lg:hidden p-2 text-slate-400 hover:text-white transition-colors"
+                    aria-label="Toggle menu"
+                  >
+                    <FontAwesomeIcon icon={faBars} />
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </nav>
         
         {/* Mobile Menu */}
-        {mobileMenuOpen && (
+        {mobileMenuOpen && isAuthenticated && user && (
           <div className="lg:hidden mt-2 mx-4 backdrop-blur-xl bg-[rgba(13,17,28,0.9)] border border-white/10 rounded-2xl shadow-2xl overflow-hidden mobile-menu-container">
             <div className="px-4 py-3 space-y-2">
               <Link
@@ -505,24 +503,20 @@ function Layout({ children }: LayoutProps) {
               >
                 Feed
               </Link>
-              {isAuthenticated && (
-                <>
-                  <Link
-                    to="/chat"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="block px-4 py-2 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
-                  >
-                    Chat
-                  </Link>
-                  <Link
-                    to="/referral"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="block px-4 py-2 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
-                  >
-                    Referral
-                  </Link>
-                </>
-              )}
+              <Link
+                to="/chat"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-4 py-2 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+              >
+                Chat
+              </Link>
+              <Link
+                to="/referral"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-4 py-2 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+              >
+                Referral
+              </Link>
               <Link
                 to="/services"
                 onClick={() => setMobileMenuOpen(false)}
@@ -530,8 +524,7 @@ function Layout({ children }: LayoutProps) {
               >
                 All Services
               </Link>
-              {isAuthenticated && (
-                <>
+              <>
                   {/* 2FA Warning Badge - Mobile */}
                   {twoFactorEnabled === false && (
                     <Link
@@ -595,26 +588,7 @@ function Layout({ children }: LayoutProps) {
                   >
                     Logout
                   </button>
-                </>
-              )}
-              {!isAuthenticated && (
-                <>
-                  <Link
-                    to="/signin"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="block px-4 py-2 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
-                  >
-                    Log In
-                  </Link>
-                  <Link
-                    to="/signup"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="block px-4 py-2 text-sm font-medium text-white hover:bg-white/5 transition-colors"
-                  >
-                    Sign Up
-                  </Link>
-                </>
-              )}
+              </>
             </div>
           </div>
         )}
