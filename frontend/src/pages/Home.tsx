@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
-  faGlobe, faPalette, faChartLine, faPen, faVideo, faMobileAlt, faStar, 
   faSearch, faShieldAlt, faRocket, faUsers, faWallet, faCheckCircle,
   faArrowRight, faHandshake, faLock, faClock, faGlobeAmericas, faStore
 } from '@fortawesome/free-solid-svg-icons'
@@ -39,15 +38,6 @@ function Home() {
       navigate('/services')
     }
   }
-
-  const featuredServices = [
-    { id: 1, title: 'Professional Website Design', price: '$299', rating: 4.9, reviews: 127, icon: faGlobe },
-    { id: 2, title: 'Logo Design Package', price: '$99', rating: 4.8, reviews: 89, icon: faPalette },
-    { id: 3, title: 'SEO Optimization', price: '$199', rating: 4.7, reviews: 156, icon: faChartLine },
-    { id: 4, title: 'Content Writing', price: '$49', rating: 4.9, reviews: 203, icon: faPen },
-    { id: 5, title: 'Video Editing', price: '$149', rating: 4.6, reviews: 67, icon: faVideo },
-    { id: 6, title: 'Social Media Management', price: '$179', rating: 4.8, reviews: 134, icon: faMobileAlt },
-  ]
 
   const features = [
     {
@@ -115,27 +105,6 @@ function Home() {
     }
   ]
 
-  const testimonials = [
-    {
-      name: 'Sarah Johnson',
-      role: 'Freelance Designer',
-      content: 'OmniMart changed my life! I can now sell my design services globally and get paid instantly.',
-      rating: 5
-    },
-    {
-      name: 'Michael Chen',
-      role: 'Business Owner',
-      content: 'Found amazing developers for my startup. The platform is secure and the sellers are professional.',
-      rating: 5
-    },
-    {
-      name: 'Emma Williams',
-      role: 'Content Creator',
-      content: 'Love how easy it is to list my services. The payment system is seamless and fast!',
-      rating: 5
-    }
-  ]
-
   return (
     <div className="min-h-screen">
       {/* Enhanced Hero Section */}
@@ -154,7 +123,7 @@ function Home() {
 
           <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight mb-6 leading-tight">
             <span className="block text-white">
-              {isAuthenticated ? `Welcome back, ${user?.firstName || 'User'}!` : 'Anyone can sell'}
+              Anyone can sell
             </span>
             <span className="block mt-2">
               <span className="text-slate-300">anything and </span>
@@ -388,106 +357,6 @@ function Home() {
               ))}
             </div>
           )}
-        </div>
-      </section>
-
-      {/* Featured Services */}
-      <section className="py-24 border-t border-white/5 relative">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between mb-12">
-            <div>
-              <h2 className="text-4xl md:text-5xl font-bold mb-4">
-                <span className="text-white">Featured </span>
-                <span className="text-gradient-primary">Listings</span>
-              </h2>
-              <p className="text-xl text-slate-400">
-                Hand-picked quality services from verified sellers
-              </p>
-            </div>
-            <Link
-              to="/services"
-              className="hidden md:flex items-center gap-2 text-primary hover:text-primary/80 transition-colors font-semibold"
-            >
-              View All
-              <FontAwesomeIcon icon={faArrowRight} />
-            </Link>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {featuredServices.map((service) => (
-              <Link
-                key={service.id}
-                to={`/services/${service.id}`}
-                className="glass-card rounded-2xl overflow-hidden hover:border-primary/20 transition-all hover:scale-[1.02] group"
-              >
-                <div className="h-48 bg-gradient-to-br from-primary/10 to-emerald-900/5 flex items-center justify-center group-hover:from-primary/20 group-hover:to-emerald-900/10 transition-all">
-                  <FontAwesomeIcon icon={service.icon} className="text-6xl text-primary group-hover:scale-110 transition-transform" />
-                </div>
-                <div className="p-6">
-                  <h3 className="text-xl font-semibold text-white mb-2 group-hover:text-primary transition-colors">{service.title}</h3>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-1">
-                      <FontAwesomeIcon icon={faStar} className="text-yellow-400" />
-                      <span className="font-semibold text-white">{service.rating}</span>
-                      <span className="text-slate-400 text-sm">({service.reviews})</span>
-                    </div>
-                    <span className="text-2xl font-bold text-primary">{service.price}</span>
-                  </div>
-                  <button className="w-full py-3 bg-primary/10 text-primary rounded-full font-semibold hover:bg-primary hover:text-white shadow-glow-primary hover:shadow-glow-primary-lg hover:-translate-y-1 transition-all group-hover:border border-primary">
-                    View Details
-                  </button>
-                </div>
-              </Link>
-            ))}
-          </div>
-          
-          <div className="text-center mt-8 md:hidden">
-            <Link
-              to="/services"
-              className="inline-flex items-center gap-2 text-primary hover:text-primary/80 transition-colors font-semibold"
-            >
-              View All Services
-              <FontAwesomeIcon icon={faArrowRight} />
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* Testimonials Section */}
-      <section className="py-24 border-t border-white/5 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent"></div>
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4">
-              <span className="text-white">What Our </span>
-              <span className="text-gradient-primary">Users Say</span>
-            </h2>
-            <p className="text-xl text-slate-400 max-w-2xl mx-auto">
-              Join thousands of satisfied buyers and sellers
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {testimonials.map((testimonial) => (
-              <div
-                key={testimonial.name}
-                className="glass-card p-8 rounded-2xl hover:border-primary/20 transition-all"
-              >
-                <div className="flex items-center gap-1 mb-4">
-                  {[...Array(testimonial.rating)].map((_, i) => (
-                    <FontAwesomeIcon key={i} icon={faStar} className="text-yellow-400 text-sm" />
-                  ))}
-                </div>
-                <p className="text-slate-300 mb-6 leading-relaxed italic">
-                  "{testimonial.content}"
-                </p>
-                <div>
-                  <p className="font-semibold text-white">{testimonial.name}</p>
-                  <p className="text-sm text-slate-400">{testimonial.role}</p>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
