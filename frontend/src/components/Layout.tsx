@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ShieldAlert, Wallet, ArrowDownLeft, ArrowUpRight, History } from "lucide-react"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 interface LayoutProps {
   children: ReactNode
@@ -201,9 +202,9 @@ function Layout({ children }: LayoutProps) {
 
   const headerRight = useMemo(() => {
     if (!isAuthenticated || !user) return null
-    return (
+  return (
       <div className="flex items-center gap-2">
-        {twoFactorEnabled === false && (
+                    {twoFactorEnabled === false && (
           <Button
             variant="outline"
             size="sm"
@@ -223,11 +224,11 @@ function Layout({ children }: LayoutProps) {
               variant="outline"
               size="sm"
               className="hidden md:flex gap-2 items-center rounded-full px-4"
-            >
+                    >
               <Wallet className="w-4 h-4 text-primary" />
               <span className="font-semibold">
                 {balance ? `${Number(balance.amount).toFixed(2)} USD` : "0.00 USD"}
-              </span>
+                      </span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
@@ -244,7 +245,9 @@ function Layout({ children }: LayoutProps) {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
+
+        <ThemeToggle />
+                    </div>
     )
   }, [balance, isAuthenticated, navigate, twoFactorEnabled, user])
 
@@ -253,8 +256,8 @@ function Layout({ children }: LayoutProps) {
     return (
       <div className="min-h-screen bg-background text-foreground">
         <main className="min-h-screen">{children}</main>
-        {!location.pathname.startsWith('/chat/') && <Footer />}
-      </div>
+      {!location.pathname.startsWith('/chat/') && <Footer />}
+    </div>
     )
   }
 
