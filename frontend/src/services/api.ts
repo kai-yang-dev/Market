@@ -415,12 +415,14 @@ export interface Conversation {
     firstName?: string;
     lastName?: string;
     userName?: string;
+    avatar?: string;
   };
   provider?: {
     id: string;
     firstName?: string;
     lastName?: string;
     userName?: string;
+    avatar?: string;
   };
   messages?: Message[];
   createdAt: string;
@@ -439,6 +441,7 @@ export interface Message {
     firstName?: string;
     lastName?: string;
     userName?: string;
+    avatar?: string;
   };
   createdAt: string;
   updatedAt: string;

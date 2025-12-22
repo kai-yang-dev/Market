@@ -2,7 +2,6 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
-  faArrowLeft,
   faSpinner,
   faPaperPlane,
   faUser,
@@ -30,6 +29,7 @@ import { useAppSelector } from '../store/hooks'
 import { getSocket } from '../services/socket'
 import { Socket } from 'socket.io-client'
 import { showToast } from '../utils/toast'
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 function Chat() {
   const { id } = useParams<{ id: string }>()
@@ -832,16 +832,17 @@ function Chat() {
   }
 
   const getStatusColor = (status: string) => {
+    // Use semantic tokens so it works in light/dark
     const colors: Record<string, string> = {
-      draft: 'bg-[#708499]',
-      processing: 'bg-[#2b5278]',
-      canceled: 'bg-[#5c2b2b]',
-      completed: 'bg-[#2b5c2b]',
-      withdraw: 'bg-[#5c4b2b]',
-      released: 'bg-[#4b2b5c]',
-      dispute: 'bg-[#5c4b2b]',
+      draft: "bg-muted text-muted-foreground",
+      processing: "bg-primary/10 text-primary",
+      canceled: "bg-destructive/10 text-destructive",
+      completed: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+      withdraw: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
+      released: "bg-purple-500/10 text-purple-700 dark:text-purple-400",
+      dispute: "bg-orange-500/10 text-orange-700 dark:text-orange-400",
     }
-    return colors[status] || 'bg-[#708499]'
+    return colors[status] || "bg-muted text-muted-foreground"
   }
 
   const getOtherUser = () => {
@@ -915,7 +916,7 @@ function Chat() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <FontAwesomeIcon icon={faSpinner} className="animate-spin text-4xl text-primary mb-4" />
-          <p className="text-neutral-400">Loading conversation...</p>
+          <p className="text-muted-foreground">Loading conversation...</p>
         </div>
       </div>
     )
@@ -925,7 +926,7 @@ function Chat() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <p className="text-neutral-400 mb-4">Conversation not found</p>
+          <p className="text-muted-foreground mb-4">Conversation not found</p>
           <button
             onClick={() => navigate('/services')}
             className="px-6 py-3 bg-primary text-primary-foreground rounded-full font-semibold hover:bg-primary/90 shadow-glow-primary hover:shadow-glow-primary-lg hover:-tranneutral-y-1 transition-all"
@@ -939,32 +940,37 @@ function Chat() {
 
   const otherUser = getOtherUser()
   const isClient = conversation.clientId === user?.id
+  const otherUserName =
+    otherUser?.firstName && otherUser?.lastName
+      ? `${otherUser.firstName} ${otherUser.lastName}`
+      : otherUser?.userName || "User"
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-background text-foreground">
       <div className="flex-1 flex min-h-0 overflow-hidden">
           {/* Main Chat Area */}
           <div className="flex-1 flex flex-col min-w-0 min-h-0">
             {/* Header */}
-            <div className="glass-card border-b border-white/10 px-4 py-3 flex items-center justify-between flex-shrink-0">
+            <div className="glass-card border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center space-x-3 flex-1 min-w-0">
-                <button
+                {/* <button
                   onClick={() => navigate('/services')}
                   className="text-neutral-400 hover:text-primary transition-colors p-2 -ml-2"
                 >
                   <FontAwesomeIcon icon={faArrowLeft} />
-                </button>
-                <div className="w-10 h-10 bg-gradient-to-br from-primary to-emerald-600 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0">
-                  {otherUser?.firstName?.[0] || otherUser?.userName?.[0] || <FontAwesomeIcon icon={faUser} />}
-                </div>
+                </button> */}
+                <Avatar className="h-10 w-10 flex-shrink-0">
+                  <AvatarImage src={(otherUser as any)?.avatar || undefined} alt={otherUserName} />
+                  <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                    {otherUser?.firstName?.[0] || otherUser?.userName?.[0] || "U"}
+                  </AvatarFallback>
+                </Avatar>
                 <div className="flex-1 min-w-0">
-                  <h2 className="text-base font-semibold text-white truncate">
-                    {otherUser?.firstName && otherUser?.lastName
-                      ? `${otherUser.firstName} ${otherUser.lastName}`
-                      : otherUser?.userName || 'User'}
+                  <h2 className="text-base font-semibold text-foreground truncate">
+                    {otherUserName}
                   </h2>
                   <div className="flex items-center gap-2">
-                    <p className="text-xs text-neutral-400 truncate">{conversation.service?.title}</p>
+                    <p className="text-xs text-muted-foreground truncate">{conversation.service?.title}</p>
                     {typingUsers.size > 0 && (
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         <div className="flex gap-0.5">
@@ -980,7 +986,7 @@ function Chat() {
                   </div>
                 </div>
               </div>
-              <button className="text-neutral-400 hover:text-primary transition-colors p-2">
+              <button className="text-muted-foreground hover:text-foreground transition-colors p-2">
                 <FontAwesomeIcon icon={faEllipsisV} />
               </button>
             </div>
@@ -1062,7 +1068,7 @@ function Chat() {
                         <div key={`msg-${message.id}`}>
                           {showDateSeparator && (
                             <div className="flex justify-center my-4">
-                              <div className="glass-card text-neutral-400 text-xs px-3 py-1 rounded-full">
+                              <div className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
                                 {itemDate.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                               </div>
                             </div>
@@ -1070,15 +1076,27 @@ function Chat() {
                           <div className={`flex items-end gap-2 mb-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
                             {/* Avatar for incoming messages */}
                             {!isOwn && (
-                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-emerald-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 mb-1">
-                                {sender?.firstName?.[0] || sender?.userName?.[0] || <FontAwesomeIcon icon={faUser} className="text-xs" />}
-                              </div>
+                              <Avatar className="h-8 w-8 flex-shrink-0 mb-1">
+                                <AvatarImage
+                                  src={sender?.avatar || undefined}
+                                  alt={
+                                    sender?.firstName && sender?.lastName
+                                      ? `${sender.firstName} ${sender.lastName}`
+                                      : sender?.userName || "User"
+                                  }
+                                />
+                                <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                                  {sender?.firstName?.[0] || sender?.userName?.[0] || (
+                                    <FontAwesomeIcon icon={faUser} className="text-xs" />
+                                  )}
+                                </AvatarFallback>
+                              </Avatar>
                             )}
 
                             <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'} max-w-[65%] ${isOwn ? 'mr-0' : 'ml-0'}`}>
                               {/* Sender name for incoming messages */}
                               {!isOwn && sender && (
-                                <span className="text-neutral-400 text-xs px-2 mb-0.5">
+                                <span className="text-muted-foreground text-xs px-2 mb-0.5">
                                   {sender.firstName && sender.lastName
                                     ? `${sender.firstName} ${sender.lastName}`
                                     : sender.userName || 'User'}
@@ -1089,7 +1107,7 @@ function Chat() {
                               <div
                                 className={`relative px-3 py-2 rounded-2xl ${isOwn
                                   ? 'bg-primary text-primary-foreground rounded-tr-sm'
-                                  : 'glass-card text-white rounded-tl-sm'
+                                  : 'glass-card text-foreground rounded-tl-sm'
                                   } shadow-sm`}
                               >
                                 {message.message && (
@@ -1121,7 +1139,7 @@ function Chat() {
                                                 style={{ maxHeight: '400px' }}
                                               />
                                               {/* Overlay with download button on hover */}
-                                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                              <div className="absolute inset-0 bg-transparent group-hover:bg-muted/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
                                                 <button
                                                   onClick={(e) => {
                                                     e.stopPropagation()
@@ -1140,7 +1158,7 @@ function Chat() {
 
                                           {/* Video Preview */}
                                           {isVideo && (
-                                            <div className="rounded-lg overflow-hidden border border-white/10">
+                                            <div className="rounded-lg overflow-hidden border border-border">
                                               <div
                                                 className="relative cursor-pointer group"
                                                 onClick={() => handlePreviewFile(fileUrl, fileName)}
@@ -1150,14 +1168,14 @@ function Chat() {
                                                   className="max-w-full max-h-64 object-contain rounded-t-lg"
                                                   preload="metadata"
                                                 />
-                                                <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
-                                                  <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                                                    <FontAwesomeIcon icon={faCheckCircle} className="text-white text-2xl" />
+                                                <div className="absolute inset-0 flex items-center justify-center bg-muted/40 group-hover:bg-muted/50 transition-colors">
+                                                  <div className="w-16 h-16 rounded-full bg-background/40 backdrop-blur-sm flex items-center justify-center">
+                                                    <FontAwesomeIcon icon={faCheckCircle} className="text-foreground text-2xl" />
                                                   </div>
                                                 </div>
                                               </div>
-                                              <div className="flex items-center justify-between px-2 py-1.5 bg-black/30">
-                                                <p className={`text-xs truncate flex-1 ${isOwn ? 'text-primary-foreground/80' : 'text-white/80'}`}>
+                                              <div className="flex items-center justify-between px-2 py-1.5 bg-muted/40">
+                                                <p className={`text-xs truncate flex-1 ${isOwn ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
                                                   {fileName}
                                                 </p>
                                                 <button
@@ -1165,7 +1183,7 @@ function Chat() {
                                                     e.stopPropagation()
                                                     handleDownloadFile(fileUrl, fileName)
                                                   }}
-                                                  className={`flex-shrink-0 p-1 rounded hover:bg-white/20 transition-colors ml-2 ${
+                                                  className={`flex-shrink-0 p-1 rounded hover:bg-muted/40 transition-colors ml-2 ${
                                                     isOwn ? 'text-primary-foreground' : 'text-primary'
                                                   }`}
                                                   title="Download"
@@ -1179,8 +1197,8 @@ function Chat() {
                                           {/* Audio Preview */}
                                           {isAudio && (
                                             <div
-                                              className={`p-3 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors ${
-                                                isOwn ? 'bg-primary-foreground/10' : 'bg-white/5'
+                                              className={`p-3 rounded-lg border border-border cursor-pointer hover:bg-muted/40 transition-colors ${
+                                                isOwn ? 'bg-primary/10 border-primary/20' : 'bg-muted/30'
                                               }`}
                                               onClick={() => handlePreviewFile(fileUrl, fileName)}
                                             >
@@ -1190,7 +1208,7 @@ function Chat() {
                                                   className={`text-2xl ${isOwn ? 'text-primary-foreground' : 'text-primary'}`}
                                                 />
                                                 <div className="flex-1 min-w-0">
-                                                  <p className={`text-sm font-medium truncate ${isOwn ? 'text-primary-foreground' : 'text-white'}`}>
+                                                  <p className={`text-sm font-medium truncate ${isOwn ? 'text-primary-foreground' : 'text-foreground'}`}>
                                                     {fileName}
                                                   </p>
                                                 </div>
@@ -1199,7 +1217,7 @@ function Chat() {
                                                     e.stopPropagation()
                                                     handleDownloadFile(fileUrl, fileName)
                                                   }}
-                                                  className={`flex-shrink-0 p-1.5 rounded hover:bg-white/20 transition-colors ${
+                                                  className={`flex-shrink-0 p-1.5 rounded hover:bg-muted/40 transition-colors ${
                                                     isOwn ? 'text-primary-foreground' : 'text-primary'
                                                   }`}
                                                   title="Download"
@@ -1221,17 +1239,17 @@ function Chat() {
                                           {/* PDF Preview - Slack Style */}
                                           {isPdf && (
                                             <div
-                                              className="rounded-lg overflow-hidden border border-white/10 cursor-pointer group hover:border-primary/50 transition-all -mx-1"
+                                              className="rounded-lg overflow-hidden border border-border cursor-pointer group hover:border-primary/50 transition-all -mx-1"
                                               onClick={() => handlePreviewFile(fileUrl, fileName)}
                                             >
                                               {/* Header with file info */}
-                                              <div className={`px-3 py-2.5 flex items-center gap-3 ${isOwn ? 'bg-primary-foreground/5' : 'bg-white/5'}`}>
+                                              <div className={`px-3 py-2.5 flex items-center gap-3 ${isOwn ? 'bg-primary/10' : 'bg-muted/30'}`}>
                                                 <FontAwesomeIcon
                                                   icon={getFileIcon(fileName)}
                                                   className={`text-lg flex-shrink-0 ${isOwn ? 'text-primary-foreground' : 'text-primary'}`}
                                                 />
                                                 <div className="flex-1 min-w-0">
-                                                  <p className={`text-sm font-medium truncate ${isOwn ? 'text-primary-foreground' : 'text-white'}`}>
+                                                  <p className={`text-sm font-medium truncate ${isOwn ? 'text-primary-foreground' : 'text-foreground'}`}>
                                                     {fileName}
                                                   </p>
                                                 </div>
@@ -1240,7 +1258,7 @@ function Chat() {
                                                     e.stopPropagation()
                                                     handleDownloadFile(fileUrl, fileName)
                                                   }}
-                                                  className={`flex-shrink-0 p-1.5 rounded hover:bg-white/20 transition-colors opacity-0 group-hover:opacity-100 ${
+                                                  className={`flex-shrink-0 p-1.5 rounded hover:bg-muted/40 transition-colors opacity-0 group-hover:opacity-100 ${
                                                     isOwn ? 'text-primary-foreground' : 'text-primary'
                                                   }`}
                                                   title="Download"
@@ -1250,7 +1268,7 @@ function Chat() {
                                               </div>
                                               
                                               {/* PDF Preview - Full Stretch */}
-                                              <div className="relative bg-neutral-900/50 w-full">
+                                              <div className="relative bg-muted/30 w-full">
                                                 <div className="w-full" style={{ minHeight: '400px', maxHeight: '600px' }}>
                                                   <iframe
                                                     src={`${fileUrl}#page=1&zoom=50`}
@@ -1264,7 +1282,7 @@ function Chat() {
                                                   />
                                                 </div>
                                                 {/* Overlay on hover */}
-                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                                <div className="absolute inset-0 bg-transparent group-hover:bg-muted/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
                                                   <div className={`px-4 py-2 rounded-full backdrop-blur-sm ${
                                                     isOwn ? 'bg-primary-foreground/80 text-primary' : 'bg-white/80 text-primary'
                                                   }`}>
@@ -1278,8 +1296,8 @@ function Chat() {
                                           {/* Other Files Preview */}
                                           {!isImage && !isVideo && !isAudio && !isPdf && (
                                             <div
-                                              className={`flex items-center gap-3 p-3 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors ${
-                                                isOwn ? 'bg-primary-foreground/10' : 'bg-white/5'
+                                              className={`flex items-center gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-muted/40 transition-colors ${
+                                                isOwn ? 'bg-primary/10 border-primary/20' : 'bg-muted/30'
                                               }`}
                                               onClick={() => handlePreviewFile(fileUrl, fileName)}
                                             >
@@ -1290,10 +1308,10 @@ function Chat() {
                                                 />
                                               </div>
                                               <div className="flex-1 min-w-0">
-                                                <p className={`text-sm font-medium truncate ${isOwn ? 'text-primary-foreground' : 'text-white'}`}>
+                                                <p className={`text-sm font-medium truncate ${isOwn ? 'text-primary-foreground' : 'text-foreground'}`}>
                                                   {fileName}
                                                 </p>
-                                                <p className={`text-xs ${isOwn ? 'text-primary-foreground/70' : 'text-neutral-400'}`}>
+                                                <p className={`text-xs ${isOwn ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                                                   Click to preview or download
                                                 </p>
                                               </div>
@@ -1302,7 +1320,7 @@ function Chat() {
                                                   e.stopPropagation()
                                                   handleDownloadFile(fileUrl, fileName)
                                                 }}
-                                                className={`flex-shrink-0 p-1.5 rounded hover:bg-white/20 transition-colors ${
+                                                className={`flex-shrink-0 p-1.5 rounded hover:bg-muted/40 transition-colors ${
                                                   isOwn ? 'text-primary-foreground' : 'text-primary'
                                                 }`}
                                                 title="Download"
@@ -1319,7 +1337,7 @@ function Chat() {
 
                                 {/* Timestamp and Read Status */}
                                 <div className={`flex items-center gap-1 mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                                  <span className={`text-[10px] ${isOwn ? 'text-primary-foreground/70' : 'text-neutral-400'}`}>
+                                  <span className={`text-[10px] ${isOwn ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                                     {formatTime(new Date(message.createdAt))}
                                   </span>
                                   {isOwn && (
@@ -1342,7 +1360,7 @@ function Chat() {
                         <div key={`mil-${milestone.id}`}>
                           {showDateSeparator && (
                             <div className="flex justify-center my-4">
-                              <div className="bg-[#182533] text-[#708499] text-xs px-3 py-1 rounded-full">
+                              <div className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
                                 {itemDate.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                               </div>
                             </div>
@@ -1351,8 +1369,8 @@ function Chat() {
                             <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'} max-w-[65%]`}>
                               <div
                                 className={`relative px-4 py-3 rounded-2xl ${isOwn
-                                  ? 'bg-primary/20 border border-primary/30 text-white rounded-tr-sm'
-                                  : 'glass-card text-white rounded-tl-sm'
+                                  ? 'bg-primary/10 border border-primary/20 text-foreground rounded-tr-sm'
+                                  : 'glass-card text-foreground rounded-tl-sm'
                                   } shadow-lg`}
                               >
                                 <div className="flex items-center justify-between mb-2">
@@ -1363,9 +1381,9 @@ function Chat() {
                                 </div>
                                 <h4 className="font-semibold mb-1.5 text-base">{milestone.title}</h4>
                                 <p className="text-sm mb-3 opacity-90 leading-relaxed">{milestone.description}</p>
-                                <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                                <div className="flex items-center justify-between pt-2 border-t border-border">
                                   <span className="text-lg font-bold text-primary">${Number(milestone.balance).toFixed(2)}</span>
-                                  <span className={`text-[10px] ${isOwn ? 'text-primary' : 'text-neutral-400'}`}>
+                                  <span className={`text-[10px] ${isOwn ? 'text-primary' : 'text-muted-foreground'}`}>
                                     {formatTime(new Date(milestone.createdAt))}
                                   </span>
                                 </div>
@@ -1383,14 +1401,14 @@ function Chat() {
                         <div key={`payment-${payment.id}`}>
                           {showDateSeparator && (
                             <div className="flex justify-center my-4">
-                              <div className="bg-[#182533] text-[#708499] text-xs px-3 py-1 rounded-full">
+                              <div className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
                                 {itemDate.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                               </div>
                             </div>
                           )}
                           <div className={`flex items-end gap-2 mb-1 ${paymentIsOwn ? 'flex-row-reverse' : 'flex-row'}`}>
                             <div className={`flex flex-col ${paymentIsOwn ? 'items-end' : 'items-start'} max-w-[65%]`}>
-                              <div className={`relative px-4 py-3 rounded-2xl bg-gradient-to-r from-purple-500/20 via-pink-500/20 to-purple-500/20 border-2 border-purple-500/50 text-white shadow-lg ${
+                              <div className={`relative px-4 py-3 rounded-2xl bg-muted/40 border border-border text-foreground shadow-lg ${
                                 paymentIsOwn ? 'rounded-tr-sm' : 'rounded-tl-sm'
                               }`}>
                                 <div className="flex items-center justify-between mb-2">
@@ -1400,43 +1418,43 @@ function Chat() {
                                   </span>
                                 </div>
                                 <div className="flex items-start gap-3 mb-3">
-                                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
-                                    <FontAwesomeIcon icon={faMoneyBillWave} className="text-white text-lg" />
+                                  <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                                    <FontAwesomeIcon icon={faMoneyBillWave} className="text-primary text-lg" />
                                   </div>
                                   <div className="flex-1">
-                                    <h4 className="font-semibold mb-1 text-base text-white">
+                                    <h4 className="font-semibold mb-1 text-base text-foreground">
                                       {isClient ? 'Payment Released - Awaiting Provider Acceptance' : 'Payment Pending Acceptance'}
                                     </h4>
-                                    <p className="text-sm mb-2 opacity-90 leading-relaxed text-neutral-300">
+                                    <p className="text-sm mb-2 opacity-90 leading-relaxed text-muted-foreground">
                                       {isClient ? (
                                         <>
-                                          You have released payment for milestone: <span className="font-semibold text-white">{milestone.title}</span>. Waiting for provider to accept.
+                                          You have released payment for milestone: <span className="font-semibold text-foreground">{milestone.title}</span>. Waiting for provider to accept.
                                         </>
                                       ) : (
                                         <>
-                                          Client has released payment for milestone: <span className="font-semibold text-white">{milestone.title}</span>
+                                          Client has released payment for milestone: <span className="font-semibold text-foreground">{milestone.title}</span>
                                         </>
                                       )}
                                     </p>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-4 mb-3 p-2 rounded-lg bg-black/20">
+                                <div className="flex items-center gap-4 mb-3 p-2 rounded-lg bg-muted/30">
                                   <div>
-                                    <span className="text-neutral-400 text-xs block mb-1">Amount</span>
+                                    <span className="text-muted-foreground text-xs block mb-1">Amount</span>
                                     <p className="text-primary font-bold text-xl">${Number(payment.amount).toFixed(2)}</p>
                                   </div>
-                                  <div className="h-8 w-px bg-white/20"></div>
+                                  <div className="h-8 w-px bg-border"></div>
                                   <div>
-                                    <span className="text-neutral-400 text-xs block mb-1">Milestone</span>
-                                    <p className="text-white font-semibold text-sm">{milestone.title}</p>
+                                    <span className="text-muted-foreground text-xs block mb-1">Milestone</span>
+                                    <p className="text-foreground font-semibold text-sm">{milestone.title}</p>
                                   </div>
                                 </div>
                                 {!isClient && (
-                                  <div className="flex gap-2 pt-2 border-t border-white/10">
+                                  <div className="flex gap-2 pt-2 border-t border-border">
                                     <button
                                       onClick={() => handleAcceptPayment(payment.id, milestone.id)}
                                       disabled={acceptingPayment === payment.id}
-                                      className="flex-1 bg-gradient-to-r from-primary to-emerald-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:shadow-lg hover:shadow-primary/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+                                      className="flex-1 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl font-semibold hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
                                     >
                                       {acceptingPayment === payment.id ? (
                                         <>
@@ -1453,15 +1471,15 @@ function Chat() {
                                   </div>
                                 )}
                                 {isClient && (
-                                  <div className="pt-2 border-t border-white/10">
-                                    <div className="flex items-center justify-center gap-2 text-neutral-400 text-xs">
+                                  <div className="pt-2 border-t border-border">
+                                    <div className="flex items-center justify-center gap-2 text-muted-foreground text-xs">
                                       <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
                                       <span>Waiting for provider to accept payment...</span>
                                     </div>
                                   </div>
                                 )}
                                 <div className={`flex items-center mt-2 ${paymentIsOwn ? 'justify-start' : 'justify-end'}`}>
-                                  <span className="text-[10px] text-neutral-400">
+                                  <span className="text-[10px] text-muted-foreground">
                                     {formatTime(new Date(payment.updatedAt || payment.createdAt))}
                                   </span>
                                 </div>
@@ -1479,14 +1497,14 @@ function Chat() {
                         <div key={`payment-success-${payment.id}`}>
                           {showDateSeparator && (
                             <div className="flex justify-center my-4">
-                              <div className="bg-[#182533] text-[#708499] text-xs px-3 py-1 rounded-full">
+                              <div className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
                                 {itemDate.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                               </div>
                             </div>
                           )}
                           <div className={`flex items-end gap-2 mb-1 ${paymentIsOwn ? 'flex-row-reverse' : 'flex-row'}`}>
                             <div className={`flex flex-col ${paymentIsOwn ? 'items-end' : 'items-start'} max-w-[65%]`}>
-                              <div className={`relative px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-500/20 via-green-500/20 to-emerald-500/20 border-2 border-emerald-500/50 text-white shadow-lg ${
+                              <div className={`relative px-4 py-3 rounded-2xl bg-muted/40 border border-border text-foreground shadow-lg ${
                                 paymentIsOwn ? 'rounded-tr-sm' : 'rounded-tl-sm'
                               }`}>
                                 <div className="flex items-center justify-between mb-2">
@@ -1496,45 +1514,45 @@ function Chat() {
                                   </span>
                                 </div>
                                 <div className="flex items-start gap-3 mb-3">
-                                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-green-500 flex items-center justify-center flex-shrink-0">
-                                    <FontAwesomeIcon icon={faCheckCircle} className="text-white text-lg" />
+                                  <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                                    <FontAwesomeIcon icon={faCheckCircle} className="text-primary text-lg" />
                                   </div>
                                   <div className="flex-1">
-                                    <h4 className="font-semibold mb-1 text-base text-white">
+                                    <h4 className="font-semibold mb-1 text-base text-foreground">
                                       {isClient ? 'Payment Completed Successfully' : 'Payment Received Successfully'}
                                     </h4>
-                                    <p className="text-sm mb-2 opacity-90 leading-relaxed text-neutral-300">
+                                    <p className="text-sm mb-2 opacity-90 leading-relaxed text-muted-foreground">
                                       {isClient ? (
                                         <>
-                                          Provider has accepted your payment for milestone: <span className="font-semibold text-white">{milestone.title}</span>
+                                          Provider has accepted your payment for milestone: <span className="font-semibold text-foreground">{milestone.title}</span>
                                         </>
                                       ) : (
                                         <>
-                                          You have successfully received payment for milestone: <span className="font-semibold text-white">{milestone.title}</span>
+                                          You have successfully received payment for milestone: <span className="font-semibold text-foreground">{milestone.title}</span>
                                         </>
                                       )}
                                     </p>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-4 mb-3 p-2 rounded-lg bg-black/20">
+                                <div className="flex items-center gap-4 mb-3 p-2 rounded-lg bg-muted/30">
                                   <div>
-                                    <span className="text-neutral-400 text-xs block mb-1">Amount</span>
+                                    <span className="text-muted-foreground text-xs block mb-1">Amount</span>
                                     <p className="text-emerald-400 font-bold text-xl">${Number(payment.amount).toFixed(2)}</p>
                                   </div>
-                                  <div className="h-8 w-px bg-white/20"></div>
+                                  <div className="h-8 w-px bg-border"></div>
                                   <div>
-                                    <span className="text-neutral-400 text-xs block mb-1">Milestone</span>
-                                    <p className="text-white font-semibold text-sm">{milestone.title}</p>
+                                    <span className="text-muted-foreground text-xs block mb-1">Milestone</span>
+                                    <p className="text-foreground font-semibold text-sm">{milestone.title}</p>
                                   </div>
                                 </div>
-                                <div className="pt-2 border-t border-white/10">
+                                <div className="pt-2 border-t border-border">
                                   <div className="flex items-center justify-center gap-2 text-emerald-400 text-xs">
                                     <FontAwesomeIcon icon={faCheckCircle} />
                                     <span>Payment processed successfully</span>
                                   </div>
                                 </div>
                                 <div className={`flex items-center mt-2 ${paymentIsOwn ? 'justify-start' : 'justify-end'}`}>
-                                  <span className="text-[10px] text-neutral-400">
+                                  <span className="text-[10px] text-muted-foreground">
                                     {formatTime(new Date(payment.updatedAt || payment.createdAt))}
                                   </span>
                                 </div>
@@ -1551,7 +1569,7 @@ function Chat() {
             </div>
 
             {/* Input Area */}
-            <div className="glass-card border-t border-white/10 px-4 py-3 flex-shrink-0 relative">
+            <div className="glass-card border-t border-border px-4 py-3 flex-shrink-0 relative">
               {/* Selected Files Preview */}
               {selectedFiles.length > 0 && (
                 <div className="mb-2 flex flex-wrap gap-2">
@@ -1564,11 +1582,11 @@ function Chat() {
                         icon={getFileIcon(file.name)}
                         className="text-primary text-xs"
                       />
-                      <span className="text-white text-xs truncate max-w-[150px]">{file.name}</span>
-                      <span className="text-neutral-400 text-xs">{formatFileSize(file.size)}</span>
+                      <span className="text-foreground text-xs truncate max-w-[150px]">{file.name}</span>
+                      <span className="text-muted-foreground text-xs">{formatFileSize(file.size)}</span>
                       <button
                         onClick={() => removeFile(index)}
-                        className="text-neutral-400 hover:text-red-400 transition-colors ml-1"
+                        className="text-muted-foreground hover:text-destructive transition-colors ml-1"
                       >
                         <FontAwesomeIcon icon={faTimes} className="text-xs" />
                       </button>
@@ -1588,7 +1606,7 @@ function Chat() {
                 />
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="text-neutral-400 hover:text-primary transition-colors p-2 flex-shrink-0"
+                  className="text-muted-foreground hover:text-foreground transition-colors p-2 flex-shrink-0"
                   title="Attach files"
                 >
                   <FontAwesomeIcon icon={faPaperclip} />
@@ -1611,13 +1629,13 @@ function Chat() {
                     }}
                     placeholder={selectedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
                     rows={1}
-                    className="w-full glass-card text-white rounded-2xl px-4 py-2.5 pr-12 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 resize-none max-h-32 overflow-y-auto placeholder-neutral-400 text-sm leading-5"
+                    className="w-full glass-card text-foreground rounded-2xl px-4 py-2.5 pr-12 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 resize-none max-h-32 overflow-y-auto placeholder:text-muted-foreground text-sm leading-5"
                     style={{ minHeight: '42px', maxHeight: '128px' }}
                   />
                   <div className="relative">
                     <button
                       onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                      className="text-neutral-400 hover:text-primary transition-colors p-2 absolute right-1 bottom-1"
+                      className="text-muted-foreground hover:text-foreground transition-colors p-2 absolute right-1 bottom-1"
                     >
                       <FontAwesomeIcon icon={faSmile} />
                     </button>
@@ -1631,7 +1649,7 @@ function Chat() {
                             <button
                               key={index}
                               onClick={() => insertEmoji(emoji)}
-                              className="text-2xl hover:bg-white/10 rounded p-1 transition-colors"
+                              className="text-2xl hover:bg-muted/40 rounded p-1 transition-colors"
                             >
                               {emoji}
                             </button>
@@ -1646,7 +1664,7 @@ function Chat() {
                   disabled={(!messageText.trim() && selectedFiles.length === 0) || sending || uploadingFiles}
                   className={`p-2.5 rounded-full flex-shrink-0 transition-all ${(messageText.trim() || selectedFiles.length > 0)
                     ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-glow-primary'
-                    : 'glass-card text-neutral-400 cursor-not-allowed'
+                    : 'glass-card text-muted-foreground cursor-not-allowed'
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   {(sending || uploadingFiles) ? (
@@ -1660,10 +1678,10 @@ function Chat() {
           </div>
 
           {/* Milestones Sidebar */}
-          <div className="w-80 glass-card border-l border-white/10 flex flex-col flex-shrink-0 min-h-0">
-            <div className="p-4 border-b border-white/10 flex-shrink-0 h-[64px]">
+          <div className="w-80 glass-card border-l border-border flex flex-col flex-shrink-0 min-h-0">
+            <div className="p-4 border-b border-border flex-shrink-0 h-[64px]">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-white">Milestones</h3>
+                <h3 className="text-lg font-semibold text-foreground">Milestones</h3>
                 {isClient && (
                   <button
                     onClick={() => setShowMilestoneForm(!showMilestoneForm)}
@@ -1680,13 +1698,13 @@ function Chat() {
                     placeholder="Title"
                     value={milestoneForm.title}
                     onChange={(e) => setMilestoneForm({ ...milestoneForm, title: e.target.value })}
-                    className="w-full glass-card text-white rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 placeholder-neutral-400 text-sm"
+                    className="w-full glass-card text-foreground rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 placeholder:text-muted-foreground text-sm"
                   />
                   <textarea
                     placeholder="Description"
                     value={milestoneForm.description}
                     onChange={(e) => setMilestoneForm({ ...milestoneForm, description: e.target.value })}
-                    className="w-full glass-card text-white rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 placeholder-neutral-400 text-sm resize-none"
+                    className="w-full glass-card text-foreground rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 placeholder:text-muted-foreground text-sm resize-none"
                     rows={3}
                   />
                   <input
@@ -1694,7 +1712,7 @@ function Chat() {
                     placeholder="Balance"
                     value={milestoneForm.balance}
                     onChange={(e) => setMilestoneForm({ ...milestoneForm, balance: e.target.value })}
-                    className="w-full glass-card text-white rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 placeholder-neutral-400 text-sm"
+                    className="w-full glass-card text-foreground rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 placeholder:text-muted-foreground text-sm"
                   />
                   <div className="flex space-x-2">
                     <button
@@ -1708,7 +1726,7 @@ function Chat() {
                         setShowMilestoneForm(false)
                         setMilestoneForm({ title: '', description: '', balance: '' })
                       }}
-                      className="flex-1 glass-card text-white px-4 py-2 rounded-full font-semibold hover:bg-white/15 transition-colors text-sm"
+                      className="flex-1 glass-card text-foreground px-4 py-2 rounded-full font-semibold hover:bg-muted/40 transition-colors text-sm"
                     >
                       Cancel
                     </button>
@@ -1719,27 +1737,27 @@ function Chat() {
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
               {milestones.length === 0 ? (
-                <p className="text-neutral-400 text-center text-sm py-8">No milestones yet</p>
+                <p className="text-muted-foreground text-center text-sm py-8">No milestones yet</p>
               ) : (
                 milestones.map((milestone) => (
                   <div key={milestone.id} className="glass-card rounded-xl p-4 space-y-3 hover:border-primary/20 transition-colors">
                     <div className="flex items-start justify-between">
-                      <h4 className="font-semibold text-white text-sm">{milestone.title}</h4>
-                      <span className={`px-2 py-1 rounded-full text-[10px] font-semibold text-white ${getStatusColor(milestone.status)}`}>
+                      <h4 className="font-semibold text-foreground text-sm">{milestone.title}</h4>
+                      <span className={`px-2 py-1 rounded-full text-[10px] font-semibold ${getStatusColor(milestone.status)}`}>
                         {milestone.status}
                       </span>
                     </div>
-                    <p className="text-sm text-neutral-400 leading-relaxed">{milestone.description}</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{milestone.description}</p>
                     {milestone.feedback && milestone.rating && (
-                      <div className="pt-2 border-t border-white/10 space-y-2">
+                      <div className="pt-2 border-t border-border space-y-2">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-neutral-400">Rating:</span>
+                          <span className="text-xs text-muted-foreground">Rating:</span>
                           <div className="flex gap-1">
                             {[1, 2, 3, 4, 5].map((star) => (
                               <span
                                 key={star}
                                 className={`text-sm ${
-                                  star <= milestone.rating! ? 'text-yellow-400' : 'text-neutral-600'
+                                  star <= milestone.rating! ? 'text-yellow-400' : 'text-muted-foreground'
                                 }`}
                               >
                                 ★
@@ -1747,10 +1765,10 @@ function Chat() {
                             ))}
                           </div>
                         </div>
-                        <p className="text-xs text-neutral-300 italic">"{milestone.feedback}"</p>
+                        <p className="text-xs text-muted-foreground italic">"{milestone.feedback}"</p>
                       </div>
                     )}
-                    <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                    <div className="flex items-center justify-between pt-2 border-t border-border">
                       <span className="text-base font-bold text-primary">${Number(milestone.balance).toFixed(2)}</span>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -1770,7 +1788,7 @@ function Chat() {
                             <button
                               onClick={() => handleMilestoneAction(milestone.id, 'cancel')}
                               disabled={updatingMilestone === milestone.id}
-                              className="flex-1 bg-red-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                              className="flex-1 bg-destructive text-destructive-foreground px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-destructive/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
                             >
                               <FontAwesomeIcon icon={faTimes} className="text-xs" />
                               Cancel
@@ -1785,7 +1803,7 @@ function Chat() {
                               <button
                                 onClick={() => handleMilestoneAction(milestone.id, 'complete')}
                                 disabled={updatingMilestone === milestone.id}
-                                className="flex-1 bg-[#2b5278] text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-[#3a6a95] transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                                className="flex-1 bg-secondary text-secondary-foreground px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-secondary/80 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
                               >
                                 <FontAwesomeIcon icon={faCheckCircle} className="text-xs" />
                                 Complete
@@ -1793,7 +1811,7 @@ function Chat() {
                               <button
                                 onClick={() => handleMilestoneAction(milestone.id, 'withdraw')}
                                 disabled={updatingMilestone === milestone.id}
-                                className="flex-1 bg-yellow-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-yellow-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                                className="flex-1 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/20 px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-yellow-500/15 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
                               >
                                 <FontAwesomeIcon icon={faMoneyBillWave} className="text-xs" />
                                 Withdraw
@@ -1810,7 +1828,7 @@ function Chat() {
                               <button
                                 onClick={() => handleMilestoneAction(milestone.id, 'release')}
                                 disabled={updatingMilestone === milestone.id}
-                                className="flex-1 bg-purple-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                                className="flex-1 bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20 px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-purple-500/15 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
                               >
                                 <FontAwesomeIcon icon={faCheckCircle} className="text-xs" />
                                 Release
@@ -1818,7 +1836,7 @@ function Chat() {
                               <button
                                 onClick={() => handleMilestoneAction(milestone.id, 'dispute')}
                                 disabled={updatingMilestone === milestone.id}
-                                className="flex-1 bg-yellow-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-yellow-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                                className="flex-1 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/20 px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-yellow-500/15 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
                               >
                                 <FontAwesomeIcon icon={faGavel} className="text-xs" />
                                 Dispute
@@ -1829,7 +1847,7 @@ function Chat() {
                             <button
                               onClick={() => handleMilestoneAction(milestone.id, 'dispute')}
                               disabled={updatingMilestone === milestone.id}
-                              className="flex-1 bg-yellow-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-yellow-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                              className="flex-1 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/20 px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-yellow-500/15 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
                             >
                               <FontAwesomeIcon icon={faGavel} className="text-xs" />
                               Dispute
@@ -1856,7 +1874,7 @@ function Chat() {
                             <button
                               onClick={() => handleMilestoneAction(milestone.id, 'dispute')}
                               disabled={updatingMilestone === milestone.id}
-                              className="flex-1 bg-yellow-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-yellow-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                              className="flex-1 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/20 px-3 py-1.5 rounded-full text-xs font-semibold hover:bg-yellow-500/15 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
                             >
                               <FontAwesomeIcon icon={faGavel} className="text-xs" />
                               Dispute
@@ -1876,14 +1894,14 @@ function Chat() {
       {showReleaseModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="glass-card rounded-xl p-6 max-w-md w-full space-y-4">
-            <h2 className="text-xl font-bold text-white mb-4">
+            <h2 className="text-xl font-bold text-foreground mb-4">
               {(() => {
                 const milestone = milestones.find(m => m.id === releaseForm.milestoneId)
                 const isAdminReleased = milestone?.status === 'released' && !milestone?.feedback
                 return isAdminReleased ? 'Provide Feedback' : 'Release Milestone'
               })()}
             </h2>
-            <p className="text-neutral-300 text-sm mb-4">
+            <p className="text-muted-foreground text-sm mb-4">
               {(() => {
                 const milestone = milestones.find(m => m.id === releaseForm.milestoneId)
                 const isAdminReleased = milestone?.status === 'released' && !milestone?.feedback
@@ -1895,7 +1913,7 @@ function Chat() {
           
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-neutral-300 mb-2">
+              <label className="block text-sm font-medium text-foreground mb-2">
                 Rating (1-5 stars) *
               </label>
               <div className="flex gap-2">
@@ -1907,7 +1925,7 @@ function Chat() {
                     className={`text-2xl transition-all ${
                       releaseForm.rating >= star
                         ? 'text-yellow-400'
-                        : 'text-neutral-500 hover:text-neutral-400'
+                        : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     ★
@@ -1915,19 +1933,19 @@ function Chat() {
                 ))}
               </div>
               {releaseForm.rating > 0 && (
-                <p className="text-xs text-neutral-400 mt-1">{releaseForm.rating} star{releaseForm.rating !== 1 ? 's' : ''} selected</p>
+                <p className="text-xs text-muted-foreground mt-1">{releaseForm.rating} star{releaseForm.rating !== 1 ? 's' : ''} selected</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-neutral-300 mb-2">
+              <label className="block text-sm font-medium text-foreground mb-2">
                 Feedback *
               </label>
               <textarea
                 value={releaseForm.feedback}
                 onChange={(e) => setReleaseForm({ ...releaseForm, feedback: e.target.value })}
                 placeholder="Share your experience with this milestone..."
-                className="w-full glass-card text-white rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 placeholder-neutral-400 text-sm resize-none"
+                className="w-full glass-card text-foreground rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 placeholder:text-muted-foreground text-sm resize-none"
                 rows={4}
               />
             </div>
@@ -1962,7 +1980,7 @@ function Chat() {
                 setReleaseForm({ milestoneId: '', feedback: '', rating: 0 })
               }}
               disabled={updatingMilestone === releaseForm.milestoneId}
-              className="flex-1 glass-card text-white px-4 py-2 rounded-full font-semibold hover:bg-white/15 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 glass-card text-foreground px-4 py-2 rounded-full font-semibold hover:bg-muted/40 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
@@ -1982,25 +2000,25 @@ function Chat() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-white/10">
+            <div className="flex items-center justify-between p-4 border-b border-border">
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <FontAwesomeIcon
                   icon={getFileIcon(previewFile.name)}
                   className="text-primary text-xl flex-shrink-0"
                 />
-                <h3 className="text-white font-semibold truncate">{previewFile.name}</h3>
+                <h3 className="text-foreground font-semibold truncate">{previewFile.name}</h3>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleDownloadFile(previewFile.url, previewFile.name)}
-                  className="text-neutral-400 hover:text-primary transition-colors p-2"
+                  className="text-muted-foreground hover:text-foreground transition-colors p-2"
                   title="Download"
                 >
                   <FontAwesomeIcon icon={faDownload} />
                 </button>
                 <button
                   onClick={closePreview}
-                  className="text-neutral-400 hover:text-red-400 transition-colors p-2"
+                  className="text-muted-foreground hover:text-destructive transition-colors p-2"
                   title="Close"
                 >
                   <FontAwesomeIcon icon={faTimes} />
@@ -2009,7 +2027,7 @@ function Chat() {
             </div>
 
             {/* Preview Content */}
-            <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-black/20">
+            <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-muted/30">
               {previewFile.type === 'image' && (
                 <img
                   src={previewFile.url}
@@ -2044,7 +2062,7 @@ function Chat() {
                       icon={getFileIcon(previewFile.name)}
                       className="text-primary text-6xl mb-4"
                     />
-                    <p className="text-white font-semibold">{previewFile.name}</p>
+                    <p className="text-foreground font-semibold">{previewFile.name}</p>
                   </div>
                   <audio
                     src={previewFile.url}
@@ -2062,8 +2080,8 @@ function Chat() {
                     icon={getFileIcon(previewFile.name)}
                     className="text-primary text-6xl mb-4"
                   />
-                  <p className="text-white font-semibold mb-2">{previewFile.name}</p>
-                  <p className="text-neutral-400 text-sm mb-4">Preview not available for this file type</p>
+                  <p className="text-foreground font-semibold mb-2">{previewFile.name}</p>
+                  <p className="text-muted-foreground text-sm mb-4">Preview not available for this file type</p>
                   <button
                     onClick={() => handleDownloadFile(previewFile.url, previewFile.name)}
                     className="bg-primary text-primary-foreground px-6 py-2 rounded-full font-semibold hover:bg-primary/90 transition-colors flex items-center gap-2 mx-auto"

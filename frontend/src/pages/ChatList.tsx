@@ -1,12 +1,20 @@
-import { useEffect, useState, useRef } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faComments, faSpinner, faSearch } from '@fortawesome/free-solid-svg-icons'
-import { conversationApi, messageApi, Conversation, Message } from '../services/api'
-import { useAppSelector } from '../store/hooks'
-import { getSocket } from '../services/socket'
-import { Socket } from 'socket.io-client'
-import Chat from './Chat'
+import { useEffect, useMemo, useRef, useState } from "react"
+import { useNavigate, useParams } from "react-router-dom"
+import { conversationApi, messageApi, Conversation, Message } from "../services/api"
+import { useAppSelector } from "../store/hooks"
+import { getSocket } from "../services/socket"
+import { Socket } from "socket.io-client"
+import Chat from "./Chat"
+import { cn } from "@/lib/utils"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
+import { ChevronLeft, Loader2, MessageSquareText, Search } from "lucide-react"
 
 interface ConversationWithLastMessage extends Conversation {
   lastMessage?: Message
@@ -16,6 +24,7 @@ interface ConversationWithLastMessage extends Conversation {
     firstName?: string
     lastName?: string
     userName?: string
+    avatar?: string
   }
 }
 
@@ -30,7 +39,8 @@ function ChatList() {
 
   useEffect(() => {
     fetchConversations()
-    setupSocket()
+    const cleanup = setupSocket()
+    return cleanup
   }, [])
 
   const setupSocket = () => {
@@ -100,6 +110,7 @@ function ChatList() {
               firstName: otherUser.firstName,
               lastName: otherUser.lastName,
               userName: otherUser.userName,
+              avatar: otherUser.avatar,
             } : undefined,
           }
         })
@@ -170,134 +181,167 @@ function ChatList() {
     )
   })
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-[calc(100vh-8rem)]">
-        <FontAwesomeIcon icon={faSpinner} className="text-primary text-4xl animate-spin" />
-      </div>
-    )
-  }
+  const selectedConversation = useMemo(
+    () => conversations.find((c) => c.id === selectedConversationId),
+    [conversations, selectedConversationId]
+  )
+
+  const selectedTitle = selectedConversation ? getOtherUserName(selectedConversation) : "Messages"
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-[1800px] h-[calc(100vh-8rem)]">
-      <div className="backdrop-blur-xl bg-[rgba(2,4,8,0.7)] border border-white/10 rounded-2xl shadow-2xl overflow-hidden h-full flex">
-        {/* Left Sidebar - Users List */}
-        <div className="w-full md:w-80 lg:w-96 border-r border-white/10 flex flex-col flex-shrink-0">
-          {/* Header */}
-          <div className="px-4 py-4 border-b border-white/10 flex-shrink-0">
-            <div className="flex items-center justify-between mb-4">
-              <h1 className="text-xl font-bold text-white flex items-center gap-2">
-                <FontAwesomeIcon icon={faComments} className="text-primary" />
+    <div className="h-[calc(100vh-8rem)]">
+      <div className="grid h-full gap-4 md:grid-cols-[360px_1fr]">
+        {/* Left: conversations */}
+        <Card className={cn("h-full overflow-hidden", selectedConversationId ? "hidden md:flex md:flex-col" : "flex flex-col")}>
+          <CardHeader className="space-y-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <MessageSquareText className="h-4 w-4 text-primary" />
                 Messages
-              </h1>
+              </CardTitle>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
             </div>
-            
-            {/* Search Bar */}
             <div className="relative">
-              <FontAwesomeIcon 
-                icon={faSearch} 
-                className="absolute left-3 top-1/2 transform -tranneutral-y-1/2 text-neutral-400 text-sm"
-              />
-              <input
-                type="text"
-                placeholder="Search conversations..."
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-black/30 border border-white/10 rounded-lg text-white placeholder-neutral-400 focus:outline-none focus:border-primary/50 transition-colors text-sm"
+                placeholder="Search conversations..."
+                className="pl-9"
               />
             </div>
-          </div>
+          </CardHeader>
+          <Separator />
 
-          {/* Conversations List */}
-          <div className="flex-1 overflow-y-auto">
-            {filteredConversations.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-center px-4">
-                <FontAwesomeIcon icon={faComments} className="text-neutral-500 text-4xl mb-3" />
-                <p className="text-neutral-400 text-sm mb-1">
-                  {searchQuery ? 'No conversations found' : 'No conversations yet'}
-                </p>
-                <p className="text-neutral-500 text-xs">
-                  {searchQuery 
-                    ? 'Try a different search term' 
-                    : 'Start a conversation by connecting with a service provider'}
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-white/5">
-                {filteredConversations.map((conversation) => {
-                  const otherUserName = getOtherUserName(conversation)
-                  const isUnread = conversation.unreadCount && conversation.unreadCount > 0
-                  const isSelected = conversation.id === selectedConversationId
-
-                  return (
-                    <div
-                      key={conversation.id}
-                      onClick={() => navigate(`/chat/${conversation.id}`)}
-                      className={`px-4 py-3 cursor-pointer transition-colors ${
-                        isSelected 
-                          ? 'bg-primary/20 border-l-2 border-primary' 
-                          : 'hover:bg-white/5'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        {/* Avatar */}
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-emerald-600 flex items-center justify-center text-white font-semibold flex-shrink-0 text-sm">
-                          {otherUserName[0]?.toUpperCase() || 'U'}
+          <ScrollArea className="flex-1">
+            <CardContent className="p-0">
+              {loading ? (
+                <div className="space-y-1 p-2">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <div key={i} className="flex items-start gap-3 rounded-lg p-3">
+                      <Skeleton className="h-10 w-10 rounded-full" />
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <Skeleton className="h-4 w-28" />
+                          <Skeleton className="h-3 w-12" />
                         </div>
-
-                        {/* Content */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <h3 className={`font-semibold truncate text-sm ${isUnread || isSelected ? 'text-white' : 'text-neutral-300'}`}>
-                              {otherUserName}
-                            </h3>
-                            {conversation.lastMessage && (
-                              <span className="text-xs text-neutral-500 flex-shrink-0 ml-2">
-                                {formatTime(conversation.lastMessage.createdAt)}
-                              </span>
-                            )}
-                          </div>
-                          
-                          {conversation.service && (
-                            <p className="text-xs text-neutral-500 mb-1 truncate">
-                              {conversation.service.title}
-                            </p>
-                          )}
-                          
-                          <p className={`text-xs truncate ${isUnread || isSelected ? 'text-white font-medium' : 'text-neutral-400'}`}>
-                            {formatMessagePreview(conversation.lastMessage)}
-                          </p>
-                        </div>
-
-                        {/* Unread Badge */}
-                        {isUnread && (
-                          <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0 mt-2"></div>
-                        )}
+                        <Skeleton className="h-3 w-40" />
+                        <Skeleton className="h-3 w-56" />
                       </div>
                     </div>
-                  )
-                })}
+                  ))}
+                </div>
+              ) : filteredConversations.length === 0 ? (
+                <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+                  <MessageSquareText className="h-10 w-10 text-muted-foreground" />
+                  <div className="mt-3 text-sm font-semibold">
+                    {searchQuery ? "No conversations found" : "No conversations yet"}
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {searchQuery
+                      ? "Try a different search term."
+                      : "Start a conversation by connecting with a service provider."}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-2">
+                  {filteredConversations.map((conversation) => {
+                    const otherUserName = getOtherUserName(conversation)
+                    const isUnread = Boolean(conversation.unreadCount && conversation.unreadCount > 0)
+                    const isSelected = conversation.id === selectedConversationId
+
+                    return (
+                      <button
+                        key={conversation.id}
+                        onClick={() => navigate(`/chat/${conversation.id}`)}
+                        className={cn(
+                          "w-full rounded-xl p-3 text-left transition-colors hover:bg-muted/40",
+                          isSelected && "bg-muted/60"
+                        )}
+                      >
+                        <div className="flex items-start gap-3">
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={conversation.otherUser?.avatar || undefined} alt={otherUserName} />
+                            <AvatarFallback className="bg-primary/10 text-primary">
+                              {(otherUserName[0] || "U").toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className={cn("truncate text-sm font-semibold", isUnread && "text-foreground")}>
+                                  {otherUserName}
+                                </div>
+                                {conversation.service?.title ? (
+                                  <div className="truncate text-xs text-muted-foreground">
+                                    {conversation.service.title}
+                                  </div>
+                                ) : null}
+                              </div>
+
+                              <div className="flex shrink-0 flex-col items-end gap-1">
+                                {conversation.lastMessage ? (
+                                  <span className="text-[11px] text-muted-foreground">
+                                    {formatTime(conversation.lastMessage.createdAt)}
+                                  </span>
+                                ) : null}
+                                {isUnread ? <Badge className="h-5 px-2 text-[10px]">New</Badge> : null}
+                              </div>
+                            </div>
+
+                            <div className={cn("mt-1 truncate text-xs", isUnread ? "text-foreground" : "text-muted-foreground")}>
+                              {formatMessagePreview(conversation.lastMessage)}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </ScrollArea>
+        </Card>
+
+        {/* Right: thread */}
+        <Card className={cn("h-full overflow-hidden", selectedConversationId ? "flex flex-col" : "hidden md:flex md:flex-col")}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden"
+                onClick={() => navigate("/chat")}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="min-w-0">
+                <CardTitle className="truncate text-base">{selectedConversationId ? selectedTitle : "Messages"}</CardTitle>
+                <div className="text-xs text-muted-foreground">
+                  {selectedConversationId ? "Conversation" : "Select a conversation to start chatting"}
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+          <Separator />
+
+          <div className="flex-1 min-h-0">
+            {selectedConversationId ? (
+              <Chat />
+            ) : (
+              <div className="flex h-full items-center justify-center p-6 text-center">
+                <div className="space-y-2">
+                  <MessageSquareText className="mx-auto h-12 w-12 text-muted-foreground" />
+                  <div className="text-sm font-semibold">Select a conversation</div>
+                  <div className="text-xs text-muted-foreground">
+                    Choose a conversation from the list to start chatting.
+                  </div>
+                </div>
               </div>
             )}
           </div>
-        </div>
-
-        {/* Right Side - Chat Interface */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {selectedConversationId ? (
-            <Chat />
-          ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center px-6">
-                <FontAwesomeIcon icon={faComments} className="text-neutral-500 text-6xl mb-4" />
-                <p className="text-neutral-400 text-lg mb-2">Select a conversation</p>
-                <p className="text-neutral-500 text-sm">
-                  Choose a conversation from the list to start chatting
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
+        </Card>
       </div>
     </div>
   )
