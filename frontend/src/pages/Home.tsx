@@ -4,7 +4,6 @@ import { useAppSelector } from "../store/hooks"
 import { categoryApi, Category, Service, serviceApi } from "../services/api"
 import { renderIcon } from "../utils/iconHelper"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -436,43 +435,8 @@ function Home() {
         </div>
       </section>
 
-      {/* Testimonials */}
-      <section className="border-t border-border bg-muted/20">
-        <div className="container mx-auto px-4 py-12 md:py-16">
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold tracking-tight">Loved by buyers and sellers</h2>
-            <p className="text-muted-foreground">A marketplace that feels like a social product.</p>
-          </div>
-
-          <Separator className="my-6" />
-
-          <div className="grid gap-4 md:grid-cols-3">
-            {[
-              { name: "Alex", role: "Buyer", quote: "I found a great service in minutes and chatted instantly to finalize details." },
-              { name: "Sam", role: "Seller", quote: "Listing is simple, and the UI feels modern—like a social network." },
-              { name: "Mina", role: "Creator", quote: "The feed helps me stay visible and build trust with new customers." },
-            ].map((t) => (
-              <Card key={t.name}>
-                <CardHeader className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarFallback>{t.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0">
-                      <CardTitle className="text-sm">{t.name}</CardTitle>
-                      <CardDescription className="text-xs">{t.role}</CardDescription>
-                    </div>
-                  </div>
-                  <div className="text-sm text-muted-foreground">“{t.quote}”</div>
-                </CardHeader>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* CTA */}
-      <section className="bg-background">
+      <section className="border-t border-border bg-muted/20">
         <div className="container mx-auto px-4 py-12 md:py-16">
           <Card className="overflow-hidden">
             <CardContent className="grid gap-6 p-6 md:grid-cols-[1.4fr_1fr] md:p-10">
