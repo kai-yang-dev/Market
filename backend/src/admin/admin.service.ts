@@ -205,7 +205,6 @@ export class AdminService {
     const walletsWithBalances = await this.mapWithConcurrency(wallets, CONCURRENCY, async (wallet) => {
       let usdtBalance = 0;
       let usdcBalance = 0;
-      let maticBalance = 0;
 
       if (wallet.network === WalletNetwork.TRON) {
         const key = `TRON:${wallet.address}:USDT`;
@@ -218,19 +217,14 @@ export class AdminService {
         }
       } else if (wallet.network === WalletNetwork.POLYGON) {
         const keyUsdc = `POLYGON:${wallet.address}:USDC`;
-        const keyMatic = `POLYGON:${wallet.address}:MATIC`;
 
         const cachedUsdc = this.getCachedBalance(keyUsdc);
-        const cachedMatic = this.getCachedBalance(keyMatic);
 
-        if (cachedUsdc !== null && cachedMatic !== null) {
+        if (cachedUsdc !== null) {
           usdcBalance = cachedUsdc;
-          maticBalance = cachedMatic;
         } else {
           usdcBalance = await this.polygonWalletService.getUSDCBalance(wallet.address);
-          maticBalance = await this.polygonWalletService.getMATICBalance(wallet.address);
           this.setCachedBalance(keyUsdc, usdcBalance, TTL_MS);
-          this.setCachedBalance(keyMatic, maticBalance, TTL_MS);
         }
       }
 
@@ -239,11 +233,55 @@ export class AdminService {
         totalReceived: Number(wallet.totalReceived || 0),
         usdtBalance: wallet.network === WalletNetwork.TRON ? usdtBalance : 0,
         usdcBalance: wallet.network === WalletNetwork.POLYGON ? usdcBalance : 0,
-        maticBalance: wallet.network === WalletNetwork.POLYGON ? maticBalance : 0,
       };
     });
 
     return walletsWithBalances;
+  }
+
+  // Fetch full balances for a single temp wallet on-demand (used by the admin transfer dialog).
+  async getTempWalletBalances(walletId: string) {
+    const wallet = await this.tempWalletRepository.findOne({
+      where: { id: walletId },
+    });
+
+    if (!wallet) {
+      throw new NotFoundException('Temp wallet not found');
+    }
+
+    if (wallet.network === WalletNetwork.TRON) {
+      const [usdt, trx] = await Promise.all([
+        this.walletService.getUSDTBalance(wallet.address),
+        this.walletService.getTRXBalance(wallet.address),
+      ]);
+      return {
+        walletId: wallet.id,
+        network: wallet.network,
+        address: wallet.address,
+        tokenSymbol: 'USDT',
+        tokenBalance: usdt,
+        gasSymbol: 'TRX',
+        gasBalance: trx,
+      };
+    }
+
+    if (wallet.network === WalletNetwork.POLYGON) {
+      const [usdc, matic] = await Promise.all([
+        this.polygonWalletService.getUSDCBalance(wallet.address),
+        this.polygonWalletService.getMATICBalance(wallet.address),
+      ]);
+      return {
+        walletId: wallet.id,
+        network: wallet.network,
+        address: wallet.address,
+        tokenSymbol: 'USDC',
+        tokenBalance: usdc,
+        gasSymbol: 'MATIC',
+        gasBalance: matic,
+      };
+    }
+
+    throw new BadRequestException('Unsupported wallet network');
   }
 
   async transferFromTempWallet(walletId: string) {
@@ -293,6 +331,31 @@ export class AdminService {
       maticTxHash: transferResult.maticTxHash,
       trxTxHash: transferResult.trxTxHash,
       amountTransferred: amountTransferred,
+    };
+  }
+
+  async transferRemainingTRXFromTempWallet(walletId: string) {
+    const tempWallet = await this.tempWalletRepository.findOne({
+      where: { id: walletId },
+    });
+
+    if (!tempWallet) {
+      throw new NotFoundException('Temp wallet not found');
+    }
+
+    if (tempWallet.network !== WalletNetwork.TRON) {
+      throw new BadRequestException('TRX transfer is only supported for TRON wallets');
+    }
+
+    const result = await this.walletService.transferRemainingTRXFromTempToMaster(tempWallet);
+    if (!result.success) {
+      throw new BadRequestException(`Transfer failed: ${result.error}`);
+    }
+
+    return {
+      success: true,
+      trxTxHash: result.trxTxHash,
+      amountTransferred: result.amountTransferred,
     };
   }
 }

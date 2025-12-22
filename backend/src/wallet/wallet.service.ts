@@ -574,5 +574,39 @@ export class WalletService {
       };
     }
   }
+
+  /**
+   * Transfer remaining TRX from temp wallet to master wallet.
+   * Keeps a small reserve for network fees to avoid "insufficient balance" failures.
+   */
+  async transferRemainingTRXFromTempToMaster(
+    tempWallet: TempWallet,
+  ): Promise<{ success: boolean; trxTxHash?: string; amountTransferred?: number; error?: string }> {
+    try {
+      const masterWallet = this.getMasterWallet();
+      const privateKey = await this.getDecryptedPrivateKey(tempWallet);
+
+      const trxBalance = await this.getTRXBalance(tempWallet.address);
+      const reserve = Number(process.env.TRON_TEMP_WALLET_TRX_RESERVE || 0.1); // TRX to keep
+      const amountToSend = Math.max(0, trxBalance - reserve);
+
+      if (amountToSend <= 0) {
+        return { success: false, error: `No TRX to transfer (balance=${trxBalance.toFixed(6)} TRX, reserve=${reserve} TRX)` };
+      }
+
+      const res = await this.sendTRX(privateKey, masterWallet.address, amountToSend);
+      if (!res.success) {
+        return { success: false, error: res.error || 'Failed to send TRX' };
+      }
+
+      return { success: true, trxTxHash: res.transactionHash, amountTransferred: amountToSend };
+    } catch (error) {
+      console.error('Error transferring remaining TRX from temp wallet to master:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
 }
 

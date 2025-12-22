@@ -96,6 +96,16 @@ export interface TempWallet {
   updatedAt: string;
 }
 
+export interface TempWalletBalances {
+  walletId: string;
+  network: 'TRON' | 'POLYGON';
+  address: string;
+  tokenSymbol: 'USDT' | 'USDC';
+  tokenBalance: number;
+  gasSymbol: 'TRX' | 'MATIC';
+  gasBalance: number;
+}
+
 export const adminApi = {
   signIn: async (data: AdminSignInData) => {
     const response = await api.post('/admin/signin', data);
@@ -112,8 +122,18 @@ export const adminApi = {
     return response.data;
   },
 
+  getTempWalletBalances: async (walletId: string): Promise<TempWalletBalances> => {
+    const response = await api.get(`/admin/temp-wallets/${walletId}/balances`);
+    return response.data;
+  },
+
   transferFromTempWallet: async (walletId: string) => {
     const response = await api.post(`/admin/temp-wallets/${walletId}/transfer`);
+    return response.data;
+  },
+
+  transferRemainingTRXFromTempWallet: async (walletId: string) => {
+    const response = await api.post(`/admin/temp-wallets/${walletId}/transfer-trx`);
     return response.data;
   },
 

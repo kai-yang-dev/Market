@@ -56,9 +56,21 @@ export class AdminController {
   }
 
   @UseGuards(AdminGuard)
+  @Get('temp-wallets/:walletId/balances')
+  async getTempWalletBalances(@Param('walletId') walletId: string) {
+    return this.adminService.getTempWalletBalances(walletId);
+  }
+
+  @UseGuards(AdminGuard)
   @Post('temp-wallets/:walletId/transfer')
   async transferFromTempWallet(@Param('walletId') walletId: string) {
     return this.adminService.transferFromTempWallet(walletId);
+  }
+
+  @UseGuards(AdminGuard)
+  @Post('temp-wallets/:walletId/transfer-trx')
+  async transferRemainingTRX(@Param('walletId') walletId: string) {
+    return this.adminService.transferRemainingTRXFromTempWallet(walletId);
   }
 }
 

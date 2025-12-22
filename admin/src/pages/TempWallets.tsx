@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { adminApi, TempWallet } from "../services/api"
+import { adminApi, TempWallet, TempWalletBalances } from "../services/api"
 import { showToast } from "../utils/toast"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Copy, RefreshCcw, Send, Wallet as WalletIcon } from "lucide-react"
+import { Copy, RefreshCcw, Send, Wallet as WalletIcon, Zap } from "lucide-react"
 
 function TempWallets() {
   const [wallets, setWallets] = useState<TempWallet[]>([])
@@ -38,6 +38,9 @@ function TempWallets() {
 
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [selectedWallet, setSelectedWallet] = useState<TempWallet | null>(null)
+  const [balancesLoading, setBalancesLoading] = useState(false)
+  const [balances, setBalances] = useState<TempWalletBalances | null>(null)
+  const [transferMode, setTransferMode] = useState<"TOKEN" | "TRX">("TOKEN")
 
   useEffect(() => {
     loadWallets()
@@ -61,8 +64,37 @@ function TempWallets() {
     const wallet = wallets.find((w) => w.id === walletId) || null
     if (!wallet) return
     setSelectedWallet(wallet)
+    setBalances(null)
+    setTransferMode("TOKEN")
     setConfirmOpen(true)
   }
+
+  const handleTransferTRX = async (walletId: string) => {
+    const wallet = wallets.find((w) => w.id === walletId) || null
+    if (!wallet) return
+    setSelectedWallet(wallet)
+    setBalances(null)
+    setTransferMode("TRX")
+    setConfirmOpen(true)
+  }
+
+  useEffect(() => {
+    const fetchBalances = async () => {
+      if (!confirmOpen || !selectedWallet) return
+      setBalancesLoading(true)
+      try {
+        const data = await adminApi.getTempWalletBalances(selectedWallet.id)
+        setBalances(data)
+      } catch (err: any) {
+        console.error("Failed to fetch wallet balances:", err)
+        showToast.error(err.response?.data?.message || "Failed to fetch wallet balances")
+        setBalances(null)
+      } finally {
+        setBalancesLoading(false)
+      }
+    }
+    void fetchBalances()
+  }, [confirmOpen, selectedWallet])
 
   const confirmTransfer = async () => {
     if (!selectedWallet) return
@@ -71,10 +103,18 @@ function TempWallets() {
     try {
       setTransferring(walletId)
       setError(null)
-      const result = await adminApi.transferFromTempWallet(walletId)
+      const result =
+        transferMode === "TRX"
+          ? await adminApi.transferRemainingTRXFromTempWallet(walletId)
+          : await adminApi.transferFromTempWallet(walletId)
 
       // Show success toast with transaction details
-      const currency = selectedWallet.network === "POLYGON" ? "USDC" : "USDT"
+      const currency =
+        transferMode === "TRX"
+          ? "TRX"
+          : selectedWallet.network === "POLYGON"
+            ? "USDC"
+            : "USDT"
       const message = (
         <div>
           <div className="font-semibold">Transfer successful!</div>
@@ -175,13 +215,27 @@ function TempWallets() {
   }, [wallets])
 
   const selectedAmount = useMemo(() => {
+    // Use on-demand fetched balance when dialog is open; fallback to list balance.
+    if (balances && selectedWallet && balances.walletId === selectedWallet.id) {
+      if (transferMode === "TRX") {
+        const reserve = 0.1
+        return Math.max(0, Number(balances.gasBalance || 0) - reserve)
+      }
+      return Number(balances.tokenBalance || 0)
+    }
     if (!selectedWallet) return 0
+    if (transferMode === "TRX") return 0
     return selectedWallet.network === "POLYGON"
       ? Number((selectedWallet as any).usdcBalance || 0)
       : Number((selectedWallet as any).usdtBalance || 0)
-  }, [selectedWallet])
+  }, [balances, selectedWallet, transferMode])
 
-  const selectedCurrency = selectedWallet?.network === "POLYGON" ? "USDC" : "USDT"
+  const selectedCurrency =
+    transferMode === "TRX"
+      ? "TRX"
+      : selectedWallet?.network === "POLYGON"
+        ? "USDC"
+        : "USDT"
 
   const statusBadge = (status: string) => {
     const s = String(status || "").toUpperCase()
@@ -395,6 +449,19 @@ function TempWallets() {
                           <Send className="h-4 w-4" />
                           {isBusy ? "Transferring…" : "Transfer"}
                         </Button>
+                        {w.network === "TRON" ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="ml-2 gap-2"
+                            disabled={isBusy}
+                            onClick={() => handleTransferTRX(w.id)}
+                            title="Transfer remaining TRX from temp wallet to master"
+                          >
+                            <Zap className="h-4 w-4" />
+                            Transfer TRX
+                          </Button>
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   )
@@ -430,13 +497,19 @@ function TempWallets() {
 
       <Dialog open={confirmOpen} onOpenChange={(v) => {
         setConfirmOpen(v)
-        if (!v) setSelectedWallet(null)
+        if (!v) {
+          setSelectedWallet(null)
+          setBalances(null)
+          setBalancesLoading(false)
+        }
       }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirm transfer</DialogTitle>
+            <DialogTitle>{transferMode === "TRX" ? "Confirm TRX transfer" : "Confirm transfer"}</DialogTitle>
             <DialogDescription>
-              This will transfer available funds from the selected temp wallet to the master wallet.
+              {transferMode === "TRX"
+                ? "This will transfer remaining TRX (gas) from the temp wallet to the master wallet."
+                : "This will transfer available funds from the selected temp wallet to the master wallet."}
             </DialogDescription>
           </DialogHeader>
 
@@ -453,6 +526,34 @@ function TempWallets() {
                   {selectedAmount.toFixed(2)} {selectedCurrency}
                 </div>
               </div>
+
+              <div className="rounded-lg border border-border p-3">
+                <div className="text-xs text-muted-foreground mb-2">Live balances</div>
+                {balancesLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-4 w-32" />
+                  </div>
+                ) : balances ? (
+                  <div className="space-y-1 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">{balances.tokenSymbol}</span>
+                      <span className="font-medium">{Number(balances.tokenBalance || 0).toFixed(6)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">{balances.gasSymbol}</span>
+                      <span className="font-medium">{Number(balances.gasBalance || 0).toFixed(6)}</span>
+                    </div>
+                    {transferMode === "TRX" ? (
+                      <div className="pt-2 text-xs text-muted-foreground">
+                        Note: keeps ~0.10 TRX as a reserve for fees.
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">Unable to load balances.</div>
+                )}
+              </div>
             </div>
           ) : null}
 
@@ -462,11 +563,20 @@ function TempWallets() {
             </Button>
             <Button
               onClick={() => void confirmTransfer()}
-              disabled={!selectedWallet || selectedAmount <= 0 || transferring === selectedWallet?.id}
+              disabled={
+                !selectedWallet ||
+                balancesLoading ||
+                selectedAmount <= 0 ||
+                transferring === selectedWallet?.id
+              }
               className="gap-2"
             >
               <Send className="h-4 w-4" />
-              {selectedWallet && transferring === selectedWallet.id ? "Transferring…" : "Confirm"}
+              {selectedWallet && transferring === selectedWallet.id
+                ? "Transferring…"
+                : transferMode === "TRX"
+                  ? "Confirm TRX transfer"
+                  : "Confirm"}
             </Button>
           </DialogFooter>
         </DialogContent>
