@@ -1,7 +1,7 @@
 import { ReactNode, useRef, useEffect, useCallback, useMemo, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAppSelector, useAppDispatch } from '../store/hooks'
-import { logout } from '../store/slices/authSlice'
+import { logout, updateUser } from '../store/slices/authSlice'
 import { showToast } from '../utils/toast'
 import { getSocket } from '../services/socket'
 import { Message, paymentApi, Balance, Notification, authApi } from '../services/api'
@@ -38,6 +38,7 @@ function Layout({ children }: LayoutProps) {
   const [balance, setBalance] = useState<Balance | null>(null)
   const [twoFactorEnabled, setTwoFactorEnabled] = useState<boolean | null>(null)
   const socketRef = useRef<Socket | null>(null)
+  const [profileHydrated, setProfileHydrated] = useState(false)
 
   const handleSignOut = () => {
     dispatch(logout())
@@ -54,6 +55,21 @@ function Layout({ children }: LayoutProps) {
         })
     }
   }, [isAuthenticated, user])
+
+  // Hydrate full user profile (incl. avatar) after refresh / older sessions where signin didn't include avatar.
+  useEffect(() => {
+    if (!isAuthenticated || !user || profileHydrated) return
+
+    authApi.getProfile()
+      .then((profile) => {
+        dispatch(updateUser(profile))
+      })
+      .catch((error) => {
+        // Not fatal; user can still browse. 401 will be handled by auth flow elsewhere.
+        console.error('Failed to hydrate profile:', error)
+      })
+      .finally(() => setProfileHydrated(true))
+  }, [dispatch, isAuthenticated, profileHydrated, user])
 
   useEffect(() => {
     refreshBalance()
@@ -114,12 +130,12 @@ function Layout({ children }: LayoutProps) {
       if (message.senderId === user.id) return
       const isOnChatPage = location.pathname.startsWith('/chat/')
       const currentChatId = location.pathname.split('/chat/')[1]
-      
+
       if (!isOnChatPage || (isOnChatPage && message.conversationId !== currentChatId)) {
         const senderName = message.sender
           ? `${message.sender.firstName || ''} ${message.sender.lastName || ''}`.trim() || message.sender.userName || 'Someone'
           : 'Someone'
-        
+
         showToast.info(
           <div onClick={() => navigate(`/chat/${message.conversationId}`)} className="cursor-pointer">
             <p className="font-semibold">{senderName}</p>
@@ -202,9 +218,9 @@ function Layout({ children }: LayoutProps) {
 
   const headerRight = useMemo(() => {
     if (!isAuthenticated || !user) return null
-  return (
+    return (
       <div className="flex items-center gap-2">
-                    {twoFactorEnabled === false && (
+        {twoFactorEnabled === false && (
           <Button
             variant="outline"
             size="sm"
@@ -224,11 +240,11 @@ function Layout({ children }: LayoutProps) {
               variant="outline"
               size="sm"
               className="hidden md:flex gap-2 items-center rounded-full px-4"
-                    >
+            >
               <Wallet className="w-4 h-4 text-primary" />
               <span className="font-semibold">
                 {balance ? `${Number(balance.amount).toFixed(2)} USD` : "0.00 USD"}
-                      </span>
+              </span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
@@ -247,7 +263,7 @@ function Layout({ children }: LayoutProps) {
         </DropdownMenu>
 
         <ThemeToggle />
-                    </div>
+      </div>
     )
   }, [balance, isAuthenticated, navigate, twoFactorEnabled, user])
 
@@ -256,8 +272,8 @@ function Layout({ children }: LayoutProps) {
     return (
       <div className="min-h-screen bg-background text-foreground">
         <main className="min-h-screen">{children}</main>
-      {!location.pathname.startsWith('/chat/') && <Footer />}
-    </div>
+        {!location.pathname.startsWith('/chat/') && <Footer />}
+      </div>
     )
   }
 

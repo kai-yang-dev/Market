@@ -296,6 +296,7 @@ export class AuthService {
         userName: user.userName,
         firstName: user.firstName,
         lastName: user.lastName,
+        avatar: user.avatar,
         role: user.role,
       },
     };
@@ -349,6 +350,7 @@ export class AuthService {
         userName: user.userName,
         firstName: user.firstName,
         lastName: user.lastName,
+        avatar: user.avatar,
         role: user.role,
       },
     };
@@ -392,6 +394,7 @@ export class AuthService {
           userName: user.userName,
           firstName: user.firstName,
           lastName: user.lastName,
+          avatar: user.avatar,
           role: user.role,
         },
       };
