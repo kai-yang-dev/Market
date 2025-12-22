@@ -846,6 +846,11 @@ export const paymentApi = {
     return response.data;
   },
 
+  cancelCharge: async (transactionId: string): Promise<{ status: string }> => {
+    const response = await api.patch(`/payment/charge/cancel/${transactionId}`);
+    return response.data;
+  },
+
   charge: async (data: ChargeData): Promise<Transaction> => {
     const response = await api.post('/payment/charge', data);
     return response.data;
