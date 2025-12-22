@@ -1,325 +1,523 @@
-import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useAppSelector } from '../store/hooks'
-import { categoryApi, Category } from '../services/api'
-import { renderIcon } from '../utils/iconHelper'
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { useEffect, useMemo, useState } from "react"
+import { Link, useNavigate } from "react-router-dom"
+import { useAppSelector } from "../store/hooks"
+import { categoryApi, Category, Service, serviceApi } from "../services/api"
+import { renderIcon } from "../utils/iconHelper"
+import { ThemeToggle } from "@/components/theme-toggle"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import { 
-  Search, 
-  ShieldCheck, 
-  Rocket, 
-  Users, 
-  Wallet, 
-  CheckCircle2, 
-  ArrowRight, 
-  Handshake, 
-  Lock, 
-  Clock, 
-  Globe, 
-  Store,
+  ArrowRight,
+  CheckCircle2,
+  ChevronRight,
+  Compass,
+  HeartHandshake,
+  Loader2,
+  Search,
+  ShieldCheck,
   Sparkles,
-  Loader2
+  Star,
+  TrendingUp,
+  Users,
 } from "lucide-react"
 
 function Home() {
   const navigate = useNavigate()
-  const { user, isAuthenticated } = useAppSelector((state) => state.auth)
+  const { isAuthenticated } = useAppSelector((state) => state.auth)
   const [categories, setCategories] = useState<Category[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState('')
+  const [featuredServices, setFeaturedServices] = useState<Service[]>([])
+  const [loadingCategories, setLoadingCategories] = useState(true)
+  const [loadingFeatured, setLoadingFeatured] = useState(true)
+  const [searchQuery, setSearchQuery] = useState("")
 
   useEffect(() => {
-    const fetchCategories = async () => {
+    let cancelled = false
+
+    const fetchData = async () => {
       try {
-        const data = await categoryApi.getAll()
-        setCategories(data)
+        const [cats, featured] = await Promise.all([
+          categoryApi.getAll(),
+          serviceApi.getAllPaginated({ page: 1, limit: 6, status: "active" }),
+        ])
+
+        if (cancelled) return
+        setCategories(cats || [])
+        setFeaturedServices(featured.data || [])
       } catch (error) {
-        console.error('Failed to fetch categories:', error)
+        console.error("Failed to load landing data:", error)
       } finally {
-        setLoading(false)
+        if (!cancelled) {
+          setLoadingCategories(false)
+          setLoadingFeatured(false)
+        }
       }
     }
-    fetchCategories()
+
+    fetchData()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const handleSearch = () => {
-    if (searchQuery.trim()) {
-      navigate(`/services?search=${encodeURIComponent(searchQuery)}`)
-    } else {
-      navigate('/services')
-    }
+    const q = searchQuery.trim()
+    const target = q ? `/services?search=${encodeURIComponent(q)}` : "/services"
+    if (!isAuthenticated) navigate(`/signin?redirect=${encodeURIComponent(target)}`)
+    else navigate(target)
   }
 
-  const features = [
+  const guardedTo = (to: string) =>
+    isAuthenticated ? to : `/signin?redirect=${encodeURIComponent(to)}`
+
+  const guardedNavigate = (to: string) => {
+    if (!isAuthenticated) navigate(`/signin?redirect=${encodeURIComponent(to)}`)
+    else navigate(to)
+  }
+
+  const navCtas = useMemo(() => {
+    if (isAuthenticated) {
+      return (
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Button asChild>
+            <Link to="/">Go to dashboard</Link>
+          </Button>
+        </div>
+      )
+    }
+
+    return (
+      <div className="flex items-center gap-2">
+        <ThemeToggle />
+        <Button variant="ghost" asChild className="hidden sm:inline-flex">
+          <Link to="/signin">Sign in</Link>
+        </Button>
+        <Button asChild>
+          <Link to="/signup">Get started</Link>
+        </Button>
+      </div>
+    )
+  }, [isAuthenticated])
+
+  const benefits = [
     {
       icon: ShieldCheck,
-      title: 'Secure Transactions',
-      description: 'Bank-level encryption and secure payment processing for all transactions',
-      color: 'bg-blue-50 text-blue-600'
-    },
-    {
-      icon: Rocket,
-      title: 'Fast & Easy',
-      description: 'Get started in minutes. List your service or find what you need instantly',
-      color: 'bg-purple-50 text-purple-600'
+      title: "Secure transactions",
+      description: "Protection and clear status tracking from start to finish.",
     },
     {
       icon: Users,
-      title: 'Global Community',
-      description: 'Connect with buyers and sellers from around the world',
-      color: 'bg-emerald-50 text-emerald-600'
+      title: "Built for community",
+      description: "Discover creators, follow trends, and chat instantly.",
     },
     {
-      icon: Wallet,
-      title: 'Crypto Payments',
-      description: 'Pay and get paid with USD. Fast, secure, and borderless',
-      color: 'bg-orange-50 text-orange-600'
+      icon: HeartHandshake,
+      title: "Made for marketplaces",
+      description: "Create listings, manage milestones, and get paid fast.",
     },
-    {
-      icon: Handshake,
-      title: 'Trusted Platform',
-      description: 'Verified sellers and buyer protection on every transaction',
-      color: 'bg-indigo-50 text-indigo-600'
-    },
-    {
-      icon: Globe,
-      title: 'Unlimited Categories',
-      description: 'Sell or buy anything - from digital services to physical products',
-      color: 'bg-pink-50 text-pink-600'
-    }
-  ]
-
-  const howItWorks = [
-    {
-      step: 1,
-      title: 'Sign Up Free',
-      description: 'Create your account in seconds. No credit card required.',
-      icon: Users
-    },
-    {
-      step: 2,
-      title: 'List or Browse',
-      description: 'Sell your services or browse thousands of available listings.',
-      icon: Store
-    },
-    {
-      step: 3,
-      title: 'Connect & Transact',
-      description: 'Chat with buyers/sellers and complete secure transactions.',
-      icon: Handshake
-    },
-    {
-      step: 4,
-      title: 'Get Paid',
-      description: 'Receive payments instantly via USD. Withdraw anytime.',
-      icon: Wallet
-    }
   ]
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Hero Section */}
-      <section className="relative pt-20 pb-20 md:pt-32 md:pb-32 overflow-hidden bg-slate-50">
-        <div className="absolute top-0 left-0 w-full h-full opacity-40 pointer-events-none">
-          <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
-          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-blue-400/20 rounded-full blur-3xl translate-x-1/2 translate-y-1/2" />
-        </div>
-        
-        <div className="container mx-auto px-4 text-center relative z-10">
-          <Badge variant="outline" className="mb-6 px-4 py-1.5 border-primary/20 bg-primary/5 text-primary gap-2 text-sm rounded-full">
-            <Sparkles className="w-3.5 h-3.5" />
-            Join 50,000+ active users
-          </Badge>
+    <div className="min-h-screen bg-background text-foreground">
+      {/* Top nav (public landing) */}
+      <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container mx-auto flex h-16 items-center justify-between px-4">
+          <div className="flex items-center gap-6">
+            <Link to="/" className="flex items-center gap-2 font-bold tracking-tight">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                O
+              </span>
+              <span>OmniMart</span>
+            </Link>
 
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold tracking-tight mb-6 text-slate-900 leading-[1.1]">
-            {isAuthenticated ? (
-              <>Welcome back, <span className="text-primary">{user?.firstName || 'User'}</span>!</>
-            ) : (
-              <>Anyone can <span className="text-primary">sell</span> anything</>
-            )}
-            <br />
-            <span className="text-slate-500">and </span>
-            <span className="underline decoration-primary/30 underline-offset-8">buy anything</span>.
-          </h1>
-          
-          <p className="text-lg md:text-xl text-slate-600 max-w-2xl mx-auto mb-10 font-medium">
-            Your universal marketplace. Sell digital services, physical products, or anything you can imagine. 
-            Get paid instantly with USD.
-          </p>
+            <nav className="hidden items-center gap-1 md:flex">
+              <Button variant="ghost" asChild className="gap-2">
+                <Link to={guardedTo("/services")}>
+                  <Compass className="h-4 w-4" />
+                  Explore
+                </Link>
+              </Button>
+              <Button variant="ghost" asChild className="gap-2">
+                <Link to={guardedTo("/feed")}>
+                  <TrendingUp className="h-4 w-4" />
+                  Feed
+                </Link>
+              </Button>
+              <Button variant="ghost" asChild className="gap-2">
+                <Link to={guardedTo("/referral")}>
+                  <Users className="h-4 w-4" />
+                  Referral
+                </Link>
+              </Button>
+            </nav>
+          </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 justify-center items-center max-w-2xl mx-auto mb-12">
-            <div className="relative flex-1 w-full">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-              <Input
-                type="text"
-                placeholder="Search for anything..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                className="w-full h-14 pl-12 pr-4 rounded-full border-slate-200 bg-white shadow-sm focus-visible:ring-primary text-base"
-              />
-            </div>
-            <Button 
-              onClick={handleSearch}
-              className="h-14 px-8 rounded-full font-bold text-base w-full sm:w-auto gap-2"
-            >
-              <Search className="w-5 h-5" /> Search
+          <div className="flex items-center gap-2">
+            <Button variant="outline" className="hidden lg:flex" asChild>
+              <Link to={guardedTo("/services")}>
+                Browse services <ChevronRight className="ml-1 h-4 w-4" />
+              </Link>
             </Button>
-          </div>
-
-          <div className="flex flex-wrap justify-center gap-4 text-slate-500 text-sm font-medium">
-            <div className="flex items-center gap-1.5">
-              <Lock className="w-4 h-4 text-primary" /> Secure Payments
-            </div>
-            <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-primary" /> Verified Sellers
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Clock className="w-4 h-4 text-primary" /> 24/7 Support
-            </div>
+            {navCtas}
           </div>
         </div>
-      </section>
+      </header>
 
-      {/* Stats Section */}
-      <section className="py-12 border-y border-slate-100 bg-white">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div className="text-center">
-              <div className="text-3xl md:text-4xl font-bold text-slate-900">50K+</div>
-              <div className="text-slate-500 text-sm font-medium">Active Users</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl md:text-4xl font-bold text-slate-900">10K+</div>
-              <div className="text-slate-500 text-sm font-medium">Active Listings</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl md:text-4xl font-bold text-slate-900">2K+</div>
-              <div className="text-slate-500 text-sm font-medium">Verified Sellers</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl md:text-4xl font-bold text-slate-900">98%</div>
-              <div className="text-slate-500 text-sm font-medium">Satisfaction Rate</div>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Hero */}
+      <section className="relative overflow-hidden border-b border-border bg-gradient-to-b from-muted/40 to-background">
+        <div className="container mx-auto grid gap-10 px-4 py-12 md:grid-cols-2 md:items-center md:py-16 lg:py-20">
+          <div className="space-y-6">
+            <Badge variant="secondary" className="w-fit gap-2">
+              <Sparkles className="h-3.5 w-3.5" />
+              Marketplace + community in one place
+            </Badge>
 
-      {/* How It Works Section */}
-      <section className="py-24 bg-white">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">How It Works</h2>
-            <p className="text-slate-600 max-w-xl mx-auto">Get started in 4 simple steps. It's that easy!</p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {howItWorks.map((step) => (
-              <div key={step.step} className="relative group text-center p-6">
-                <div className="w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto mb-6 relative z-10 transition-transform group-hover:scale-110">
-                  <step.icon className="w-8 h-8" />
-                  <div className="absolute -top-2 -right-2 w-7 h-7 bg-white border-2 border-primary rounded-full flex items-center justify-center text-xs font-bold text-primary">
-                    {step.step}
-                  </div>
-                </div>
-                <h3 className="text-lg font-bold text-slate-900 mb-2">{step.title}</h3>
-                <p className="text-slate-600 text-sm leading-relaxed">{step.description}</p>
-                {step.step < 4 && (
-                  <div className="hidden lg:block absolute top-14 left-[calc(50%+4rem)] w-[calc(100%-8rem)] h-px bg-slate-200" />
-                )}
+            <div className="space-y-3">
+              <h1 className="text-balance text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl">
+                Buy services, hire talent, and build in public.
+              </h1>
+              <p className="text-pretty text-base text-muted-foreground sm:text-lg">
+                OmniMart combines a modern marketplace with a social feed—discover work, connect fast, and pay securely.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSearch()
+                  }}
+                  placeholder="Search services, skills, or keywords..."
+                  className="h-11 pl-9"
+                />
               </div>
-            ))}
+              <Button onClick={handleSearch} className="h-11 gap-2">
+                <Search className="h-4 w-4" />
+                Search
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+              <span className="inline-flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-primary" />
+                Verified sellers
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-primary" />
+                Secure payments
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Button asChild className="gap-2">
+                <Link to="/signup">
+                  Create account <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button variant="outline" asChild>
+                <Link to={guardedTo("/services")}>Explore listings</Link>
+              </Button>
+            </div>
           </div>
+
+          <Card className="relative overflow-hidden">
+            <CardHeader className="space-y-1">
+              <CardTitle className="text-base">Popular right now</CardTitle>
+              <CardDescription>Quick picks from active listings.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {loadingFeatured ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-16 w-full" />
+                </div>
+              ) : featuredServices.length === 0 ? (
+                <div className="flex items-center gap-3 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4" />
+                  No featured services yet.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {featuredServices.slice(0, 3).map((svc) => (
+                    <button
+                      key={svc.id}
+                      onClick={() => guardedNavigate(`/services/${svc.id}`)}
+                      className="w-full rounded-lg border border-border p-3 text-left transition-colors hover:bg-muted/40"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold">{svc.title}</div>
+                          <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">{svc.adText}</div>
+                        </div>
+                        <Badge variant="outline" className="shrink-0">
+                          {svc.balance} USD
+                        </Badge>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          <Star className="h-3.5 w-3.5 text-primary" />
+                          {Number(svc.rating || 0).toFixed(1)}
+                        </span>
+                        <span className="inline-flex items-center gap-2">
+                          View <ArrowRight className="h-3.5 w-3.5" />
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <Button variant="outline" asChild className="w-full">
+                <Link to={guardedTo("/services")}>See all services</Link>
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </section>
 
-      {/* Features Section */}
-      <section className="py-24 bg-slate-50">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">Why Choose OmniMart</h2>
-            <p className="text-slate-600 max-w-xl mx-auto">Everything you need to buy and sell with confidence</p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-            {features.map((feature, index) => (
-              <Card key={index} className="border-none shadow-sm hover:shadow-md transition-all">
-                <CardHeader>
-                  <div className={`w-12 h-12 rounded-xl ${feature.color} flex items-center justify-center mb-2`}>
-                    <feature.icon className="w-6 h-6" />
-                  </div>
-                  <CardTitle className="text-xl">{feature.title}</CardTitle>
+      {/* Social proof */}
+      <section className="border-b border-border bg-background">
+        <div className="container mx-auto px-4 py-10">
+          <div className="grid gap-4 md:grid-cols-4">
+            {[
+              { label: "Active users", value: "50K+" },
+              { label: "Listings", value: "10K+" },
+              { label: "Verified sellers", value: "2K+" },
+              { label: "Satisfaction", value: "98%" },
+            ].map((stat) => (
+              <Card key={stat.label}>
+                <CardHeader className="py-5">
+                  <CardTitle className="text-2xl">{stat.value}</CardTitle>
+                  <CardDescription>{stat.label}</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <CardDescription className="text-slate-600 text-sm leading-relaxed">
-                    {feature.description}
-                  </CardDescription>
-                </CardContent>
               </Card>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Categories Section */}
-      <section className="py-24 bg-white">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between mb-12">
-            <div>
-              <h2 className="text-3xl font-bold text-slate-900 mb-2">Browse by Category</h2>
-              <p className="text-slate-600">Explore thousands of listings across all categories</p>
+      {/* Categories */}
+      <section className="bg-background">
+        <div className="container mx-auto px-4 py-12 md:py-16">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div className="space-y-1">
+              <h2 className="text-2xl font-bold tracking-tight">Browse categories</h2>
+              <p className="text-muted-foreground">Start with what you need—then explore deeper.</p>
             </div>
-            <Button variant="outline" asChild className="hidden sm:flex rounded-full">
-              <Link to="/services">View All <ArrowRight className="ml-2 w-4 h-4" /></Link>
+            <Button variant="outline" asChild className="w-fit">
+              <Link to={guardedTo("/services")} className="gap-2">
+                View all <ArrowRight className="h-4 w-4" />
+              </Link>
             </Button>
           </div>
-          
-          {loading ? (
-            <div className="flex justify-center py-20">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+
+          <Separator className="my-6" />
+
+          {loadingCategories ? (
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-[128px] w-full rounded-xl" />
+              ))}
             </div>
           ) : categories.length === 0 ? (
-            <div className="text-center py-20 text-slate-400">No categories available</div>
+            <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
+              No categories available yet.
+            </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6">
-              {categories.map((category) => (
-                <Link
-                  key={category.id}
-                  to={`/services?category=${category.id}`}
-                  className="group"
-                >
-                  <div className="h-full p-6 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-primary/20 hover:shadow-md transition-all flex flex-col items-center text-center gap-4">
-                    {category.icon && (
-                      <div className="w-16 h-16 rounded-2xl bg-white border border-slate-100 flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm">
-                        <div className="text-3xl text-primary grayscale group-hover:grayscale-0 transition-all">
-                          {renderIcon(category.icon)}
-                        </div>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+              {categories.slice(0, 12).map((cat) => (
+                <Link key={cat.id} to={guardedTo(`/services?category=${cat.id}`)} className="group">
+                  <Card className="h-full transition-colors group-hover:bg-muted/30">
+                    <CardHeader className="items-center gap-3 py-6">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <span className="text-2xl">{cat.icon ? renderIcon(cat.icon) : "•"}</span>
                       </div>
-                    )}
-                    <div>
-                      <h3 className="font-bold text-slate-900 text-sm mb-1 group-hover:text-primary transition-colors">
-                        {category.title}
-                      </h3>
-                      {category.serviceCount !== undefined && (
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                          {category.serviceCount} {category.serviceCount === 1 ? 'listing' : 'listings'}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                      <div className="space-y-1 text-center">
+                        <CardTitle className="text-sm">{cat.title}</CardTitle>
+                        <CardDescription className="text-xs">
+                          {cat.serviceCount ?? 0} listings
+                        </CardDescription>
+                      </div>
+                    </CardHeader>
+                  </Card>
                 </Link>
               ))}
             </div>
           )}
+        </div>
+      </section>
+
+      {/* Featured services */}
+      <section className="border-t border-border bg-muted/20">
+        <div className="container mx-auto px-4 py-12 md:py-16">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div className="space-y-1">
+              <h2 className="text-2xl font-bold tracking-tight">Featured services</h2>
+              <p className="text-muted-foreground">Fresh listings from the community.</p>
+            </div>
+            <Button asChild className="w-fit">
+              <Link to={guardedTo("/services")} className="gap-2">
+                Explore <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+
+          <Separator className="my-6" />
+
+          {loadingFeatured ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-[180px] w-full rounded-xl" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {featuredServices.map((svc) => (
+                <Card key={svc.id} className="overflow-hidden">
+                  <CardHeader className="space-y-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <CardTitle className="line-clamp-1 text-base">{svc.title}</CardTitle>
+                      <Badge variant="secondary" className="shrink-0">
+                        {svc.balance} USD
+                      </Badge>
+                    </div>
+                    <CardDescription className="line-clamp-2">{svc.adText}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span className="inline-flex items-center gap-1">
+                        <Star className="h-4 w-4 text-primary" />
+                        {Number(svc.rating || 0).toFixed(1)}
+                      </span>
+                      {svc.category?.title ? (
+                        <Badge variant="outline">{svc.category.title}</Badge>
+                      ) : null}
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => guardedNavigate(`/services/${svc.id}`)}
+                    >
+                      View details
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Benefits */}
+      <section className="bg-background">
+        <div className="container mx-auto px-4 py-12 md:py-16">
+          <div className="grid gap-6 md:grid-cols-3">
+            {benefits.map((b) => (
+              <Card key={b.title}>
+                <CardHeader className="space-y-2">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <b.icon className="h-5 w-5" />
+                  </div>
+                  <CardTitle className="text-base">{b.title}</CardTitle>
+                  <CardDescription>{b.description}</CardDescription>
+                </CardHeader>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials */}
+      <section className="border-t border-border bg-muted/20">
+        <div className="container mx-auto px-4 py-12 md:py-16">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold tracking-tight">Loved by buyers and sellers</h2>
+            <p className="text-muted-foreground">A marketplace that feels like a social product.</p>
+          </div>
+
+          <Separator className="my-6" />
+
+          <div className="grid gap-4 md:grid-cols-3">
+            {[
+              { name: "Alex", role: "Buyer", quote: "I found a great service in minutes and chatted instantly to finalize details." },
+              { name: "Sam", role: "Seller", quote: "Listing is simple, and the UI feels modern—like a social network." },
+              { name: "Mina", role: "Creator", quote: "The feed helps me stay visible and build trust with new customers." },
+            ].map((t) => (
+              <Card key={t.name}>
+                <CardHeader className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <Avatar>
+                      <AvatarFallback>{t.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <CardTitle className="text-sm">{t.name}</CardTitle>
+                      <CardDescription className="text-xs">{t.role}</CardDescription>
+                    </div>
+                  </div>
+                  <div className="text-sm text-muted-foreground">“{t.quote}”</div>
+                </CardHeader>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="bg-background">
+        <div className="container mx-auto px-4 py-12 md:py-16">
+          <Card className="overflow-hidden">
+            <CardContent className="grid gap-6 p-6 md:grid-cols-[1.4fr_1fr] md:p-10">
+              <div className="space-y-3">
+                <Badge variant="secondary" className="w-fit">Start today</Badge>
+                <div className="space-y-2">
+                  <div className="text-2xl font-bold tracking-tight">Create a profile, list a service, and grow.</div>
+                  <div className="text-muted-foreground">
+                    Get the social discovery of a feed with the structure of a marketplace.
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button asChild className="gap-2">
+                    <Link to="/signup">
+                      Create account <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <Button variant="outline" asChild>
+                    <Link to="/signin">Sign in</Link>
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border bg-muted/30 p-4">
+                <div className="text-sm font-semibold">Quick actions</div>
+                <div className="mt-3 space-y-2">
+                  <Button variant="secondary" className="w-full justify-between" asChild>
+                    <Link to={guardedTo("/services")}>
+                      Browse services <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <Button variant="secondary" className="w-full justify-between" asChild>
+                    <Link to={guardedTo("/feed")}>
+                      Open community feed <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <Button variant="secondary" className="w-full justify-between" asChild>
+                    <Link to={guardedTo("/referral")}>
+                      Referral program <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </section>
     </div>

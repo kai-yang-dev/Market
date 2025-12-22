@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { authApi } from '../services/api';
 import { useAppDispatch } from '../store/hooks';
 import { setCredentials } from '../store/slices/authSlice';
@@ -16,10 +16,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
 import { Loader2, ShieldCheck, Mail, Lock } from "lucide-react";
 
 function SignIn() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams()
   const dispatch = useAppDispatch();
   const [formData, setFormData] = useState({
     email: '',
@@ -33,6 +35,17 @@ function SignIn() {
   const [tempToken, setTempToken] = useState<string | null>(null);
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [twoFactorMethod, setTwoFactorMethod] = useState<'totp' | 'email'>('totp');
+
+  const redirectParam = searchParams.get("redirect")
+  const redirectTo = (() => {
+    if (!redirectParam) return "/"
+    try {
+      const decoded = decodeURIComponent(redirectParam)
+      return decoded.startsWith("/") ? decoded : "/"
+    } catch {
+      return "/"
+    }
+  })()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,7 +63,7 @@ function SignIn() {
       } else {
         dispatch(setCredentials({ user: response.user, accessToken: response.accessToken }));
         showToast.success('Welcome back!');
-        navigate('/');
+        navigate(redirectTo);
       }
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Invalid email or password';
@@ -72,7 +85,7 @@ function SignIn() {
       const response = await authApi.twoFactor.verifyLogin(tempToken, twoFactorCode);
       dispatch(setCredentials({ user: response.user, accessToken: response.accessToken }));
       showToast.success('Welcome back!');
-      navigate('/');
+      navigate(redirectTo);
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Invalid 2FA code';
       setError(errorMessage);
@@ -104,21 +117,33 @@ function SignIn() {
               )}
               <div className="space-y-2">
                 <Label htmlFor="2fa-code">Verification Code</Label>
-                <Input
-                  id="2fa-code"
-                  type="text"
-                  placeholder="000000"
-                  className="text-center text-2xl tracking-widest h-12"
-                  required
-                  maxLength={10}
-                  value={twoFactorCode}
-                  onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
-                />
+                <div className="flex justify-center">
+                  <InputOTP
+                    id="2fa-code"
+                    maxLength={6}
+                    inputMode="numeric"
+                    pattern="^[0-9]+$"
+                    value={twoFactorCode}
+                    onChange={(value) => setTwoFactorCode(value.replace(/\D/g, "").slice(0, 6))}
+                  >
+                    <InputOTPGroup>
+                      <InputOTPSlot index={0} />
+                      <InputOTPSlot index={1} />
+                      <InputOTPSlot index={2} />
+                      <InputOTPSlot index={3} />
+                      <InputOTPSlot index={4} />
+                      <InputOTPSlot index={5} />
+                    </InputOTPGroup>
+                  </InputOTP>
+                </div>
+                <p className="text-xs text-muted-foreground text-center">
+                  Enter the 6-digit code.
+                </p>
               </div>
               <Button 
                 type="submit" 
                 className="w-full h-11 text-base font-semibold"
-                disabled={loading || twoFactorCode.length < 4}
+                disabled={loading || twoFactorCode.length < 6}
               >
                 {loading ? (
                   <>
