@@ -46,7 +46,7 @@ export function AppSidebar({
   const navSecondary = [
     { title: "Profile", to: "/profile", icon: UserCircleIcon },
     { title: "Security", to: "/settings/security", icon: SettingsIcon },
-    { title: "Wallet", to: "/transactions", icon: WalletIcon },
+    // { title: "Wallet", to: "/transactions", icon: WalletIcon },
     { title: "Notifications", to: "/notifications", icon: BellIcon },
     { title: "Get Help", to: "/support", icon: HelpCircleIcon },
   ]
