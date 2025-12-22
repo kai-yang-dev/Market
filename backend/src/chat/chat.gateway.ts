@@ -15,8 +15,7 @@ import { Repository, In } from 'typeorm';
 import { User } from '../entities/user.entity';
 import { Conversation } from '../entities/conversation.entity';
 import { Message } from '../entities/message.entity';
-import { NotificationService } from '../notification/notification.service';
-import { NotificationType } from '../entities/notification.entity';
+import { MessageService } from '../message/message.service';
 
 @Injectable()
 @WebSocketGateway({
@@ -40,8 +39,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private conversationRepository: Repository<Conversation>,
     @InjectRepository(Message)
     private messageRepository: Repository<Message>,
-    @Inject(forwardRef(() => NotificationService))
-    private notificationService: NotificationService,
+    @Inject(forwardRef(() => MessageService))
+    private messageService: MessageService,
   ) {}
 
   async handleConnection(client: Socket) {
@@ -163,65 +162,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           return;
         }
       }
+      const userRecord =
+        conversation.clientId !== userId && conversation.providerId !== userId
+          ? await this.userRepository.findOne({ where: { id: userId } })
+          : null;
+      const isAdmin = userRecord?.role === 'admin';
 
-      // Create message
-      const message = this.messageRepository.create({
-        conversationId: data.conversationId,
-        senderId: userId,
-        message: data.message,
-        attachmentFiles: data.attachmentFiles,
-      });
-
-      const savedMessage = await this.messageRepository.save(message);
-
-      // Update conversation's updatedAt
-      await this.conversationRepository.update(data.conversationId, { updatedAt: new Date() });
-
-      // Load message with sender info
-      const messageWithSender = await this.messageRepository.findOne({
-        where: { id: savedMessage.id },
-        relations: ['sender'],
-      });
-
-      // Emit to all clients in the conversation room
-      this.server.to(`conversation:${data.conversationId}`).emit('new_message', messageWithSender);
-
-      // Create notification for the recipient (not the sender) only if they're not in the conversation room
-      const recipientId = conversation.clientId === userId ? conversation.providerId : conversation.clientId;
-      if (recipientId) {
-        // Check if recipient is in the conversation room (i.e., currently viewing the chat)
-        let recipientIsInRoom = false;
-        try {
-          // Use fetchSockets to get all sockets in the room
-          const socketsInRoom = await this.server.in(`conversation:${data.conversationId}`).fetchSockets();
-          recipientIsInRoom = socketsInRoom.some((socket) => {
-            return socket.data.userId === recipientId;
-          });
-        } catch (error) {
-          // If we can't check, assume recipient is not in room (safer to send notification)
-          console.error('Error checking if recipient is in room:', error);
-          recipientIsInRoom = false;
-        }
-
-        // Only send notification if recipient is NOT in the conversation room
-        if (!recipientIsInRoom) {
-          const senderName = messageWithSender.sender
-            ? `${messageWithSender.sender.firstName || ''} ${messageWithSender.sender.lastName || ''}`.trim() || messageWithSender.sender.userName || 'Someone'
-            : 'Someone';
-          
-          const messagePreview = data.message.length > 100 
-            ? data.message.substring(0, 100) + '...'
-            : data.message;
-
-          await this.notificationService.createNotification(
-            recipientId,
-            NotificationType.MESSAGE,
-            `New message from ${senderName}`,
-            messagePreview,
-            { conversationId: data.conversationId, messageId: savedMessage.id },
-          );
-        }
-      }
+      // Delegate to MessageService so HTTP + WS paths behave the same (persistence + sender + notifications).
+      await this.messageService.create(
+        data.conversationId,
+        userId,
+        { message: data.message, attachmentFiles: data.attachmentFiles },
+        isAdmin,
+      );
     } catch (error) {
       console.error('Error sending message:', error);
       client.emit('error', { message: 'Failed to send message' });

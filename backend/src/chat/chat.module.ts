@@ -6,6 +6,7 @@ import { User } from '../entities/user.entity';
 import { Conversation } from '../entities/conversation.entity';
 import { Message } from '../entities/message.entity';
 import { NotificationModule } from '../notification/notification.module';
+import { MessageModule } from '../message/message.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { NotificationModule } from '../notification/notification.module';
       secret: process.env.JWT_SECRET || 'your-secret-key-change-in-production',
     }),
     forwardRef(() => NotificationModule),
+    forwardRef(() => MessageModule),
   ],
   providers: [ChatGateway],
   exports: [ChatGateway],
