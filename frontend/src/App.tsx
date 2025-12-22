@@ -22,6 +22,10 @@ import SecuritySettings from './pages/SecuritySettings'
 import Referral from './pages/Referral'
 import Layout from './components/Layout'
 import Dashboard from "./pages/Dashboard"
+import PrivacyPolicy from "./pages/PrivacyPolicy"
+import TermsOfService from "./pages/TermsOfService"
+import CookiePolicy from "./pages/CookiePolicy"
+import Support from "./pages/Support"
 
 function App() {
   const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated)
@@ -54,6 +58,10 @@ function App() {
                 <Route path="/transactions" element={<Transactions />} />
                 <Route path="/notifications" element={<Notifications />} />
                 <Route path="/referral" element={<Referral />} />
+                <Route path="/privacy" element={<PrivacyPolicy />} />
+                <Route path="/terms" element={<TermsOfService />} />
+                <Route path="/cookies" element={<CookiePolicy />} />
+                <Route path="/support" element={<Support />} />
               </Routes>
             </Layout>
           }
