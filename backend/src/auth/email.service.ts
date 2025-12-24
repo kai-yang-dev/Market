@@ -168,7 +168,7 @@ export class EmailService {
             <p style="color: #666; margin-bottom: 0;">${lastNotification.message}</p>
           </div>
           <p>You have <strong>${unreadCount}</strong> unread notification${unreadCount !== 1 ? 's' : ''} waiting for you.</p>
-          <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/notifications" style="display: inline-block; padding: 12px 24px; background-color: #10b981; color: white; text-decoration: none; border-radius: 4px; margin: 20px 0;">
+          <a href="${process.env.FRONTEND_URL || 'http://localhost:5173/'}notifications" style="display: inline-block; padding: 12px 24px; background-color: #10b981; color: white; text-decoration: none; border-radius: 4px; margin: 20px 0;">
             View All Notifications
           </a>
           <p style="color: #999; font-size: 12px; margin-top: 30px;">
