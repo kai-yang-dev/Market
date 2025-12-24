@@ -34,6 +34,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { showToast } from '../utils/toast'
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
@@ -78,6 +80,11 @@ function Chat() {
   const [isDragging, setIsDragging] = useState(false)
   const [previewFile, setPreviewFile] = useState<{ url: string; name: string; type: string } | null>(null)
   const [hasMoreMessages, setHasMoreMessages] = useState(true)
+  const [requestingReactivation, setRequestingReactivation] = useState(false)
+  const [reactivationRequested, setReactivationRequested] = useState(false)
+
+  const isBlocked = Boolean(conversation?.isBlocked)
+  const reactivationPending = Boolean(conversation?.reactivationRequestPending) || reactivationRequested
   const [loadingMoreMessages, setLoadingMoreMessages] = useState(false)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
 
@@ -124,6 +131,29 @@ function Chat() {
         }
         return [...prev, message]
       })
+    }
+
+    // Follow-up fraud flag after message is sent
+    const handleMessageFraud = (data: { conversationId: string; messageId: string; fraud?: any }) => {
+      if (data.conversationId !== id) return
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === data.messageId
+            ? {
+                ...m,
+                isFraud: true,
+                fraud: data.fraud || { category: null, reason: null, confidence: null },
+              }
+            : m,
+        ),
+      )
+    }
+
+    const handleConversationBlocked = (data: { conversationId: string; reason?: string }) => {
+      if (data.conversationId !== id) return
+      showToast.error('Conversation was blocked due to fraud detection.')
+      setConversation((prev) => (prev ? { ...prev, isBlocked: true, blockedReason: data.reason || 'fraud_threshold_reached' } as any : prev))
+      fetchConversation()
     }
 
     // Listen for milestone updates
@@ -244,6 +274,8 @@ function Chat() {
     }
 
     socket.on('new_message', handleNewMessage)
+    socket.on('message_fraud', handleMessageFraud)
+    socket.on('conversation_blocked', handleConversationBlocked)
     socket.on('milestone_updated', handleMilestoneUpdate)
     socket.on('payment_pending', handlePaymentPending)
     socket.on('payment_accepted', handlePaymentAccepted)
@@ -257,12 +289,19 @@ function Chat() {
     })
     socket.on('error', (error) => {
       console.error('Socket error:', error)
+      const msg = (error as any)?.message || ''
+      if (typeof msg === 'string' && msg.toLowerCase().includes('blocked')) {
+        showToast.error(msg)
+        fetchConversation()
+      }
     })
 
     // Cleanup on unmount
     return () => {
       if (socket) {
         socket.off('new_message', handleNewMessage)
+        socket.off('message_fraud', handleMessageFraud)
+        socket.off('conversation_blocked', handleConversationBlocked)
         socket.off('milestone_updated', handleMilestoneUpdate)
         socket.off('payment_pending', handlePaymentPending)
         socket.off('payment_accepted', handlePaymentAccepted)
@@ -530,6 +569,13 @@ function Chat() {
     try {
       const data = await conversationApi.getById(id!)
       setConversation(data)
+      // If conversation becomes unblocked, reset local request state
+      if (!data?.isBlocked) {
+        setReactivationRequested(false)
+      }
+      if (data?.reactivationRequestPending) {
+        setReactivationRequested(true)
+      }
     } catch (error) {
       console.error('Failed to fetch conversation:', error)
       showToast.error('Failed to load conversation')
@@ -624,6 +670,10 @@ function Chat() {
 
   const handleSendMessage = async () => {
     if ((!messageText.trim() && selectedFiles.length === 0) || !id) return
+    if (isBlocked) {
+      showToast.error('This conversation is blocked. You can request reactivation.')
+      return
+    }
 
     try {
       setSending(true)
@@ -672,9 +722,30 @@ function Chat() {
     } catch (error: any) {
       console.error('Failed to send message:', error)
       showToast.error(error.response?.data?.message || 'Failed to send message. Please try again.')
+      if (String(error.response?.data?.message || '').toLowerCase().includes('blocked')) {
+        fetchConversation()
+      }
     } finally {
       setSending(false)
       setUploadingFiles(false)
+    }
+  }
+
+  const handleRequestReactivation = async () => {
+    if (!id) return
+    try {
+      setRequestingReactivation(true)
+      await conversationApi.requestReactivation(id)
+      setReactivationRequested(true)
+      showToast.success('Reactivation request sent to admin.')
+      fetchConversation()
+    } catch (error: any) {
+      console.error('Failed to request reactivation:', error)
+      showToast.error(error.response?.data?.message || 'Failed to send reactivation request')
+      // If it's already pending, refresh conversation so the button disables for this user too
+      fetchConversation()
+    } finally {
+      setRequestingReactivation(false)
     }
   }
 
@@ -1341,6 +1412,41 @@ function Chat() {
                                   </div>
                                 )}
 
+                                {/* Fraud flag (shadcn UI) */}
+                                {((message as any).isFraud || (message as any).fraud) && (
+                                  <Alert
+                                    variant={isOwn ? "default" : "destructive"}
+                                    className={`mt-2 rounded-xl border px-3 py-2 ${
+                                      isOwn
+                                        ? 'border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground'
+                                        : 'border-destructive/25 bg-destructive/10'
+                                    }`}
+                                  >
+                                    <div className="flex items-start gap-2">
+                                      <Badge
+                                        variant={isOwn ? "secondary" : "destructive"}
+                                        className={`h-5 px-2 text-[10px] tracking-wide ${
+                                          isOwn
+                                            ? 'border-primary-foreground/25 bg-primary-foreground/15 text-primary-foreground'
+                                            : 'bg-destructive text-destructive-foreground'
+                                        }`}
+                                      >
+                                        FRAUD
+                                      </Badge>
+                                      <div className="min-w-0">
+                                        <AlertTitle className={`text-[11px] ${isOwn ? 'text-primary-foreground' : ''}`}>
+                                          This message was flagged by fraud detection
+                                        </AlertTitle>
+                                        {(message as any).fraud?.reason ? (
+                                          <AlertDescription className={`text-[11px] ${isOwn ? 'text-primary-foreground/75' : ''}`}>
+                                            {(message as any).fraud.reason}
+                                          </AlertDescription>
+                                        ) : null}
+                                      </div>
+                                    </div>
+                                  </Alert>
+                                )}
+
                                 {/* Timestamp and Read Status */}
                                 <div className={`flex items-center gap-1 mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
                                   <span className={`text-[10px] ${isOwn ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
@@ -1576,6 +1682,26 @@ function Chat() {
 
             {/* Input Area */}
             <div className="glass-card border-t border-border px-4 py-3 flex-shrink-0 relative">
+              {/* Blocked banner */}
+              {isBlocked && (
+                <div className="mb-3 p-3 rounded-xl border border-red-500/30 bg-red-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="text-sm">
+                    <div className="text-red-200 font-medium">Conversation blocked</div>
+                    <div className="text-red-200/80">
+                      Messaging is disabled due to fraud detections. You can request reactivation from the admin.
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={handleRequestReactivation}
+                    disabled={requestingReactivation || reactivationPending}
+                    variant={reactivationPending ? "secondary" : "default"}
+                  >
+                    {reactivationPending ? "Request pending" : requestingReactivation ? "Sending..." : "Request reactivation"}
+                  </Button>
+                </div>
+              )}
+
               {/* Selected Files Preview */}
               {selectedFiles.length > 0 && (
                 <div className="mb-2 flex flex-wrap gap-2">
@@ -1612,6 +1738,7 @@ function Chat() {
                 />
                 <button
                   onClick={() => fileInputRef.current?.click()}
+                  disabled={isBlocked}
                   className="text-muted-foreground hover:text-foreground transition-colors p-2 flex-shrink-0"
                   title="Attach files"
                 >
@@ -1635,12 +1762,14 @@ function Chat() {
                     }}
                     placeholder={selectedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
                     rows={1}
+                    disabled={isBlocked}
                     className="w-full glass-card text-foreground rounded-2xl px-4 py-2.5 pr-12 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 resize-none max-h-32 overflow-y-auto placeholder:text-muted-foreground text-sm leading-5"
                     style={{ minHeight: '42px', maxHeight: '128px' }}
                   />
                   <div className="relative">
                     <button
                       onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                      disabled={isBlocked}
                       className="text-muted-foreground hover:text-foreground transition-colors p-2 absolute right-1 bottom-1"
                     >
                       <FontAwesomeIcon icon={faSmile} />
@@ -1667,7 +1796,7 @@ function Chat() {
                 </div>
                 <button
                   onClick={handleSendMessage}
-                  disabled={(!messageText.trim() && selectedFiles.length === 0) || sending || uploadingFiles}
+                  disabled={isBlocked || (!messageText.trim() && selectedFiles.length === 0) || sending || uploadingFiles}
                   className={`p-2.5 rounded-full flex-shrink-0 transition-all ${(messageText.trim() || selectedFiles.length > 0)
                     ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-glow-primary'
                     : 'glass-card text-muted-foreground cursor-not-allowed'

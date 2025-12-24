@@ -26,6 +26,7 @@ export interface AdminSignInData {
 }
 
 export type HelpRequestStatus = 'pending' | 'approved';
+export type ReactivationRequestStatus = 'pending' | 'approved' | 'rejected';
 
 export interface HelpRequest {
   id: string;
@@ -169,6 +170,26 @@ export const adminApi = {
 
   approveHelp: async (id: string): Promise<HelpRequest> => {
     const response = await api.post(`/admin/help/${id}/approve`);
+    return response.data;
+  },
+
+  getFraudConversations: async (params?: { blocked?: 'blocked' | 'unblocked' | 'all'; pending?: boolean }): Promise<FraudConversationRow[]> => {
+    const response = await api.get('/admin/fraud', {
+      params: {
+        blocked: params?.blocked,
+        pending: params?.pending,
+      },
+    });
+    return response.data;
+  },
+
+  approveReactivationRequest: async (requestId: string) => {
+    const response = await api.post(`/admin/fraud/reactivation-requests/${requestId}/approve`, {});
+    return response.data;
+  },
+
+  rejectReactivationRequest: async (requestId: string) => {
+    const response = await api.post(`/admin/fraud/reactivation-requests/${requestId}/reject`, {});
     return response.data;
   },
 };
@@ -399,6 +420,9 @@ export interface Conversation {
   clientId: string
   providerId: string
   serviceId: string
+  isBlocked?: boolean
+  blockedAt?: string | null
+  blockedReason?: string | null
   client?: {
     id: string
     firstName?: string
@@ -419,6 +443,61 @@ export interface Conversation {
   }
   createdAt: string
   updatedAt: string
+}
+
+export interface FraudDetection {
+  id: string
+  conversationId: string
+  messageId: string
+  senderId: string
+  messageText: string
+  category?: string
+  reason?: string
+  confidence?: 'low' | 'medium' | 'high'
+  signals?: string[]
+  sender?: {
+    id: string
+    firstName?: string
+    lastName?: string
+    userName?: string
+    email?: string
+  }
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ReactivationRequest {
+  id: string
+  conversationId: string
+  requesterId: string
+  requester?: {
+    id: string
+    firstName?: string
+    lastName?: string
+    userName?: string
+    email?: string
+  }
+  status: ReactivationRequestStatus
+  decidedAt?: string | null
+  decidedBy?: {
+    id: string
+    firstName?: string
+    lastName?: string
+    userName?: string
+    email?: string
+  } | null
+  note?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface FraudConversationRow {
+  conversation: Conversation
+  fraudCount: number
+  latestFraudAt: string | null
+  frauds: FraudDetection[]
+  reactivationRequests: ReactivationRequest[]
+  pendingRequestCount: number
 }
 
 export interface Message {
