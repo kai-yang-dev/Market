@@ -7,6 +7,7 @@ import { CreateMessageDto } from './dto/create-message.dto';
 import { ChatGateway } from '../chat/chat.gateway';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationType } from '../entities/notification.entity';
+import { FraudService } from '../fraud/fraud.service';
 
 @Injectable()
 export class MessageService {
@@ -19,6 +20,7 @@ export class MessageService {
     private chatGateway: ChatGateway,
     @Inject(forwardRef(() => NotificationService))
     private notificationService: NotificationService,
+    private fraudService: FraudService,
   ) {}
 
   async create(conversationId: string, userId: string, createMessageDto: CreateMessageDto, isAdmin: boolean = false): Promise<Message> {
@@ -36,6 +38,11 @@ export class MessageService {
       throw new ForbiddenException('You do not have access to this conversation');
     }
 
+    // Blocked conversation: client/provider cannot send messages
+    if (!isAdmin && conversation.isBlocked) {
+      throw new ForbiddenException('This conversation is blocked due to fraud detection. You can request reactivation.');
+    }
+
     const message = this.messageRepository.create({
       conversationId,
       senderId: userId,
@@ -51,11 +58,53 @@ export class MessageService {
     // Load message with sender info for WebSocket emission
     const messageWithSender = await this.findOne(savedMessage.id);
 
-    // Emit to all clients in the conversation room
-    this.chatGateway.server.to(`conversation:${conversationId}`).emit('new_message', messageWithSender);
+    // Send message immediately to the SENDER only (receiver gets it only if it passes fraud check)
+    this.chatGateway.server.to(`user:${userId}`).emit('new_message', messageWithSender);
+
+    // Evaluate fraud AFTER sender has received the message (requirement: check after message sent)
+    const fraudResult = await this.fraudService.evaluateMessage(conversationId, savedMessage);
+
+    const recipients = [conversation.clientId, conversation.providerId].filter((id) => id && id !== userId);
+    const allParticipants = Array.from(new Set([conversation.clientId, conversation.providerId].filter(Boolean))) as string[];
+
+    if (fraudResult.isFraud) {
+      // Inform only the sender that their message was flagged
+      const fraudByMessageId = await this.fraudService.getFraudsByMessageIds([savedMessage.id]);
+      const fd = fraudByMessageId.get(savedMessage.id);
+
+      this.chatGateway.server.to(`user:${userId}`).emit('message_fraud', {
+        conversationId,
+        messageId: savedMessage.id,
+        fraud: fd
+          ? {
+              category: fd.category || null,
+              reason: fd.reason || null,
+              confidence: fd.confidence || null,
+            }
+          : { category: null, reason: null, confidence: null },
+      });
+    } else {
+      // Not fraud => deliver to the OTHER participant(s)
+      for (const rid of recipients) {
+        this.chatGateway.server.to(`user:${rid}`).emit('new_message', messageWithSender);
+      }
+    }
+
+    if (fraudResult.conversationBlocked) {
+      // Both participants must know the conversation got blocked
+      for (const pid of allParticipants) {
+        this.chatGateway.server.to(`user:${pid}`).emit('conversation_blocked', {
+          conversationId,
+          reason: 'fraud_threshold_reached',
+        });
+      }
+    }
 
     // Create notification for recipients (client and provider) only if they're not in the conversation room
-    const recipients = [conversation.clientId, conversation.providerId].filter(id => id && id !== userId);
+    // Only send notifications for non-fraud messages (since receiver won't see fraud messages)
+    if (fraudResult.isFraud) {
+      return messageWithSender;
+    }
     
     for (const recipientId of recipients) {
       // Check if recipient is in the conversation room (i.e., currently viewing the chat)
@@ -139,9 +188,30 @@ export class MessageService {
     const hasMore = messages.length > limit;
     const resultMessages = hasMore ? messages.slice(0, limit) : messages;
 
+    // Attach fraud info (if any) for UI rendering
+    const fraudByMessageId = await this.fraudService.getFraudsByMessageIds(resultMessages.map((m) => m.id));
+    for (const m of resultMessages) {
+      const fd = fraudByMessageId.get(m.id);
+      if (fd) {
+        (m as any).isFraud = true;
+        (m as any).fraud = {
+          category: fd.category || null,
+          reason: fd.reason || null,
+          confidence: fd.confidence || null,
+        };
+      } else {
+        (m as any).isFraud = false;
+      }
+    }
+
+    // Hide fraud-flagged messages from NON-senders (receiver should never see flagged messages)
+    const visibleMessages = isAdmin
+      ? resultMessages
+      : resultMessages.filter((m: any) => !m.isFraud || m.senderId === userId);
+
     // Reverse to get chronological order (oldest to newest)
     return {
-      messages: resultMessages.reverse(),
+      messages: visibleMessages.reverse(),
       hasMore,
     };
   }
@@ -154,6 +224,19 @@ export class MessageService {
 
     if (!message) {
       throw new NotFoundException('Message not found');
+    }
+
+    const fraudByMessageId = await this.fraudService.getFraudsByMessageIds([message.id]);
+    const fd = fraudByMessageId.get(message.id);
+    if (fd) {
+      (message as any).isFraud = true;
+      (message as any).fraud = {
+        category: fd.category || null,
+        reason: fd.reason || null,
+        confidence: fd.confidence || null,
+      };
+    } else {
+      (message as any).isFraud = false;
     }
 
     return message;

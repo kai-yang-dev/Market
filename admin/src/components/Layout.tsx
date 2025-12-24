@@ -12,6 +12,7 @@ import {
   Wallet,
   ArrowUpRight,
   Gavel,
+  ShieldAlert,
   Megaphone,
   LifeBuoy,
   LogOut,
@@ -41,6 +42,7 @@ function Layout({ children }: LayoutProps) {
     { path: '/temp-wallets', label: 'Temp Wallets', icon: Wallet },
     { path: '/withdraws', label: 'Withdraws', icon: ArrowUpRight },
     { path: '/disputes', label: 'Disputes', icon: Gavel },
+    { path: '/fraud', label: 'Fraud', icon: ShieldAlert },
     { path: '/broadcast', label: 'Broadcast', icon: Megaphone },
     { path: '/helps', label: 'Helps', icon: LifeBuoy },
   ]

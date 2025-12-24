@@ -3,10 +3,14 @@ import { ConversationService } from './conversation.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../admin/guards/admin.guard';
+import { FraudService } from '../fraud/fraud.service';
 
 @Controller('conversations')
 export class ConversationController {
-  constructor(private readonly conversationService: ConversationService) {}
+  constructor(
+    private readonly conversationService: ConversationService,
+    private readonly fraudService: FraudService,
+  ) {}
 
   @Post()
   @UseGuards(JwtAuthGuard)
@@ -45,6 +49,12 @@ export class ConversationController {
   async findOne(@Param('id') id: string, @Request() req) {
     const isAdmin = req.user.role === 'admin';
     return this.conversationService.findOne(id, req.user.id, isAdmin);
+  }
+
+  @Post(':id/reactivation-request')
+  @UseGuards(JwtAuthGuard)
+  async requestReactivation(@Param('id') id: string, @Request() req) {
+    return this.fraudService.requestReactivation(id, req.user.id);
   }
 }
 

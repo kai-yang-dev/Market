@@ -36,6 +36,9 @@ import { Referral } from './entities/referral.entity';
 import { ReferralReward } from './entities/referral-reward.entity';
 import { HelpModule } from './help/help.module';
 import { HelpRequest } from './entities/help-request.entity';
+import { FraudModule } from './fraud/fraud.module';
+import { FraudDetection } from './entities/fraud-detection.entity';
+import { ConversationReactivationRequest } from './entities/conversation-reactivation-request.entity';
 
 @Module({
   imports: [
@@ -53,7 +56,28 @@ import { HelpRequest } from './entities/help-request.entity';
         username: configService.get<string>('DB_USERNAME', 'root'),
         password: configService.get<string>('DB_PASSWORD', 'Csh104729!'),
         database: configService.get<string>('DB_DATABASE', 'market'),
-        entities: [User, Category, Service, Tag, Conversation, Message, Milestone, Post, PostLike, PostComment, PostCommentLike, Balance, Transaction, TempWallet, Notification, Referral, ReferralReward, HelpRequest],
+        entities: [
+          User,
+          Category,
+          Service,
+          Tag,
+          Conversation,
+          Message,
+          Milestone,
+          Post,
+          PostLike,
+          PostComment,
+          PostCommentLike,
+          Balance,
+          Transaction,
+          TempWallet,
+          Notification,
+          Referral,
+          ReferralReward,
+          HelpRequest,
+          FraudDetection,
+          ConversationReactivationRequest,
+        ],
         synchronize: configService.get<boolean>('DB_SYNCHRONIZE', true), // Set to false in production
         logging: configService.get<boolean>('DB_LOGGING', false),
       }),
@@ -73,6 +97,7 @@ import { HelpRequest } from './entities/help-request.entity';
     NotificationModule,
     ReferralModule,
     HelpModule,
+    FraudModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -409,6 +409,16 @@ export interface Conversation {
   serviceId: string;
   clientId: string;
   providerId: string;
+  isBlocked?: boolean;
+  blockedAt?: string | null;
+  blockedReason?: string | null;
+  reactivationRequestPending?: boolean;
+  pendingReactivationRequest?: {
+    id: string;
+    requesterId: string;
+    createdAt: string;
+    status: 'pending' | 'approved' | 'rejected';
+  } | null;
   service?: Service;
   client?: {
     id: string;
@@ -436,6 +446,12 @@ export interface Message {
   message: string;
   attachmentFiles?: string[];
   readAt?: string;
+  isFraud?: boolean;
+  fraud?: {
+    category?: string | null;
+    reason?: string | null;
+    confidence?: 'low' | 'medium' | 'high' | null;
+  };
   sender?: {
     id: string;
     firstName?: string;
@@ -625,6 +641,11 @@ export const conversationApi = {
 
   getById: async (id: string): Promise<Conversation> => {
     const response = await api.get(`/conversations/${id}`);
+    return response.data;
+  },
+
+  requestReactivation: async (conversationId: string) => {
+    const response = await api.post(`/conversations/${conversationId}/reactivation-request`, {});
     return response.data;
   },
 

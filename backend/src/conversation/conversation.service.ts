@@ -10,12 +10,16 @@ import { MilestoneStatus } from '../entities/milestone.entity';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationType } from '../entities/notification.entity';
 import { User } from '../entities/user.entity';
+import { ConversationReactivationRequest, ReactivationRequestStatus } from '../entities/conversation-reactivation-request.entity';
+import { FraudService } from '../fraud/fraud.service';
 
 @Injectable()
 export class ConversationService {
   constructor(
     @InjectRepository(Conversation)
     private conversationRepository: Repository<Conversation>,
+    @InjectRepository(ConversationReactivationRequest)
+    private conversationReactivationRequestRepository: Repository<ConversationReactivationRequest>,
     @InjectRepository(Service)
     private serviceRepository: Repository<Service>,
     @InjectRepository(Message)
@@ -26,6 +30,7 @@ export class ConversationService {
     private userRepository: Repository<User>,
     @Inject(forwardRef(() => NotificationService))
     private notificationService: NotificationService,
+    private fraudService: FraudService,
   ) {}
 
   async create(userId: string, createConversationDto: CreateConversationDto): Promise<Conversation> {
@@ -120,6 +125,28 @@ export class ConversationService {
     if (userId && !isAdmin && conversation.clientId !== userId && conversation.providerId !== userId) {
       throw new ForbiddenException('You do not have access to this conversation');
     }
+
+    // Hide fraud-flagged messages from the OTHER participant (defense-in-depth)
+    if (userId && !isAdmin && Array.isArray((conversation as any).messages) && (conversation as any).messages.length > 0) {
+      const msgs: any[] = (conversation as any).messages;
+      const fraudByMessageId = await this.fraudService.getFraudsByMessageIds(msgs.map((m) => m.id));
+      (conversation as any).messages = msgs.filter((m) => !fraudByMessageId.has(m.id) || m.senderId === userId);
+    }
+
+    // Attach pending reactivation request summary for UI (disable button for both sides)
+    const pending = await this.conversationReactivationRequestRepository.findOne({
+      where: { conversationId: conversation.id, status: ReactivationRequestStatus.PENDING } as any,
+      order: { createdAt: 'DESC' } as any,
+    });
+    (conversation as any).reactivationRequestPending = Boolean(pending);
+    (conversation as any).pendingReactivationRequest = pending
+      ? {
+          id: pending.id,
+          requesterId: pending.requesterId,
+          createdAt: pending.createdAt,
+          status: pending.status,
+        }
+      : null;
 
     return conversation;
   }

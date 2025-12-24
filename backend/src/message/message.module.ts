@@ -7,6 +7,7 @@ import { Conversation } from '../entities/conversation.entity';
 import { ChatModule } from '../chat/chat.module';
 import { NotificationModule } from '../notification/notification.module';
 import { StorageModule } from '../storage/storage.module';
+import { FraudModule } from '../fraud/fraud.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { StorageModule } from '../storage/storage.module';
     forwardRef(() => ChatModule),
     forwardRef(() => NotificationModule),
     StorageModule,
+    FraudModule,
   ],
   controllers: [MessageController],
   providers: [MessageService],
