@@ -98,7 +98,7 @@ export class AuthService {
     );
 
     // Send verification email
-    const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify-email?token=${verificationToken}`;
+    const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173/'}verify-email?token=${verificationToken}`;
     await this.emailService.sendVerificationEmail(dto.email, verificationUrl);
 
     return {
