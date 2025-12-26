@@ -24,7 +24,7 @@ function Footer() {
               A modern marketplace where anyone can sell and buy services. Discover talent, hire fast, and keep everything in one place.
             </p>
 
-            {/* Social */}
+            {/* Social
             <div className="flex items-center gap-2 pt-1">
               <Button variant="ghost" size="icon" asChild>
                 <a href="#" aria-label="Twitter">
@@ -46,7 +46,7 @@ function Footer() {
                   <Github className="h-5 w-5" />
                 </a>
               </Button>
-            </div>
+            </div> */}
           </div>
 
           {/* Product */}
