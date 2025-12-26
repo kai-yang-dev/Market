@@ -51,6 +51,15 @@ export class ServiceService {
       await this.tagRepository.save(tags);
     }
 
+    // Notify user that the service is pending approval
+    await this.notificationService.createNotification(
+      userId,
+      NotificationType.SERVICE_PENDING_APPROVAL,
+      'Service submitted',
+      'Please wait until your service is approved.',
+      { serviceId: savedService.id, serviceTitle: savedService.title },
+    );
+
     return this.findOne(savedService.id);
   }
 
