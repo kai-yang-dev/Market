@@ -254,11 +254,15 @@ function Profile() {
     )
   }
 
-  const displayName =
+  const fullName =
     (user.firstName || user.lastName)
       ? `${user.firstName || ""} ${user.lastName || ""}`.trim()
-      : user.userName || user.email
-  const avatarFallback = (displayName?.[0] || "U").toUpperCase()
+      : ""
+
+  // Header should never use a raw email as the big title (not user-friendly).
+  const headerTitle = fullName || (user.userName ? `@${user.userName}` : "My Profile")
+  const avatarLabel = fullName || user.userName || user.email
+  const avatarFallback = (avatarLabel?.[0] || "U").toUpperCase()
 
   const validateAvatarFile = (file: File) => {
     const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
@@ -308,7 +312,7 @@ function Profile() {
           <div className="flex items-end gap-4">
             <div className="relative">
               <Avatar className="h-20 w-20 border-4 border-background shadow-sm">
-                <AvatarImage src={user.avatar || ""} alt={displayName} />
+                <AvatarImage src={user.avatar || ""} alt={avatarLabel} />
                 <AvatarFallback>{avatarFallback}</AvatarFallback>
               </Avatar>
               <Button
@@ -323,9 +327,15 @@ function Profile() {
             </div>
 
             <div className="min-w-0">
-              <div className="truncate text-xl font-bold">{displayName}</div>
-              <div className="truncate text-sm text-muted-foreground">
-                {user.userName ? `@${user.userName}` : user.email}
+              <div className="truncate text-xl font-bold">{headerTitle}</div>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                {fullName && user.userName ? <span className="truncate">@{user.userName}</span> : null}
+                <span className="inline-flex min-w-0 items-center gap-1">
+                  <Mail className="h-3.5 w-3.5" />
+                  <span className="max-w-[22rem] truncate" title={user.email}>
+                    {user.email}
+                  </span>
+                </span>
               </div>
               <div className="flex flex-wrap items-center gap-2 pt-2">
                 <Badge variant={user.emailVerified ? "secondary" : "outline"} className="gap-1">
@@ -899,7 +909,7 @@ function Profile() {
           <div className="space-y-4">
             <div className="flex items-center gap-4">
               <Avatar className="h-16 w-16">
-                <AvatarImage src={avatarPreview || user.avatar || ""} alt={displayName} />
+                <AvatarImage src={avatarPreview || user.avatar || ""} alt={avatarLabel} />
                 <AvatarFallback>{avatarFallback}</AvatarFallback>
               </Avatar>
               <div className="flex flex-col gap-2">

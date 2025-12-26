@@ -244,7 +244,6 @@ function Chat() {
     if (selectedMessageIds.size === 0) return
     if (!user?.id) return
 
-    const ids = Array.from(selectedMessageIds)
     const deletable = selectedDeletableIds
 
     if (deletable.length === 0) {
