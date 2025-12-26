@@ -387,6 +387,7 @@ export const serviceApi = {
     if (data.title) formData.append('title', data.title);
     if (data.adText) formData.append('adText', data.adText);
     if (data.balance !== undefined) formData.append('balance', data.balance.toString());
+    if (data.paymentDuration) formData.append('paymentDuration', data.paymentDuration);
     if (data.status) formData.append('status', data.status);
     if (data.tags) {
       data.tags.forEach((tag) => formData.append('tags[]', tag));
