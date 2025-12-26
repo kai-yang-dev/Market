@@ -23,6 +23,8 @@ function CreateService() {
   const { isAuthenticated } = useAppSelector((state) => state.auth)
   const [categories, setCategories] = useState<Category[]>([])
   const [submitting, setSubmitting] = useState(false)
+  const [isDraggingImage, setIsDraggingImage] = useState(false)
+  const dragCounterRef = useRef(0)
 
   const [formData, setFormData] = useState({
     categoryId: '',
@@ -55,54 +57,82 @@ function CreateService() {
     }
   }
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-
+  const setImageFromFile = (file?: File) => {
     // Reset previous state
     setImageFile(null)
     setImagePreview(null)
     setErrors((prev) => ({ ...prev, image: '' }))
 
-    if (!file) {
-      return
-    }
+    if (!file) return
 
     // Validate file type
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
     if (!validTypes.includes(file.type)) {
       setErrors((prev) => ({ ...prev, image: 'Only JPG, PNG, GIF, or WEBP image files are allowed' }))
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
+      if (fileInputRef.current) fileInputRef.current.value = ''
       return
     }
-    
+
     // Validate file size (5MB)
     if (file.size > 5 * 1024 * 1024) {
       setErrors((prev) => ({ ...prev, image: 'Image size must be less than 5MB' }))
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
+      if (fileInputRef.current) fileInputRef.current.value = ''
       return
     }
-    
+
     // File is valid, set it
     setImageFile(file)
     setErrors((prev) => ({ ...prev, image: '' }))
-    
+
     // Create preview
     const reader = new FileReader()
-    reader.onloadend = () => {
-      setImagePreview(reader.result as string)
-    }
+    reader.onloadend = () => setImagePreview(reader.result as string)
     reader.onerror = () => {
       setErrors((prev) => ({ ...prev, image: 'Failed to load image preview' }))
       setImageFile(null)
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
     reader.readAsDataURL(file)
+  }
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setImageFromFile(e.target.files?.[0])
+  }
+
+  const handleImageDragEnter = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounterRef.current += 1
+    setIsDraggingImage(true)
+  }
+
+  const handleImageDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounterRef.current -= 1
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0
+      setIsDraggingImage(false)
+    }
+  }
+
+  const handleImageDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    // Explicitly show copy cursor
+    e.dataTransfer.dropEffect = 'copy'
+    setIsDraggingImage(true)
+  }
+
+  const handleImageDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounterRef.current = 0
+    setIsDraggingImage(false)
+
+    const file = e.dataTransfer.files?.[0]
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    setImageFromFile(file)
   }
 
   const handleAddTag = () => {
@@ -303,24 +333,46 @@ function CreateService() {
               </div>
 
               {imagePreview ? (
-                <div className="rounded-lg border p-3">
+                <div
+                  className={[
+                    "rounded-lg border p-3 relative",
+                    isDraggingImage ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : "",
+                  ].join(" ")}
+                  onDragEnter={handleImageDragEnter}
+                  onDragLeave={handleImageDragLeave}
+                  onDragOver={handleImageDragOver}
+                  onDrop={handleImageDrop}
+                >
                   <img
                     src={imagePreview}
                     alt="Preview"
                     className="max-h-64 w-full rounded-md object-contain"
                   />
+                  {isDraggingImage ? (
+                    <div className="absolute inset-0 rounded-lg bg-primary/10 backdrop-blur-[1px] flex items-center justify-center">
+                      <div className="rounded-md border bg-background/80 px-3 py-2 text-sm font-medium text-foreground shadow-sm">
+                        Drop image to replace
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <div
                   className={[
                     "rounded-lg border border-dashed p-6",
                     "flex items-center justify-between gap-4",
+                    "relative transition-colors",
                     errors.image ? "border-destructive" : "border-border",
+                    isDraggingImage ? "bg-primary/5 border-primary ring-2 ring-primary ring-offset-2 ring-offset-background" : "",
                   ].join(" ")}
+                  onDragEnter={handleImageDragEnter}
+                  onDragLeave={handleImageDragLeave}
+                  onDragOver={handleImageDragOver}
+                  onDrop={handleImageDrop}
                 >
                   <div className="space-y-1">
                     <div className="text-sm font-medium">Upload a file</div>
-                    <div className="text-xs text-muted-foreground">PNG, JPG, GIF, WEBP up to 5MB</div>
+                    <div className="text-xs text-muted-foreground">Drag & drop or choose a file — PNG, JPG, GIF, WEBP up to 5MB</div>
                   </div>
                   <Button type="button" variant="secondary" className="gap-2" onClick={() => fileInputRef.current?.click()}>
                     <UploadCloud className="h-4 w-4" />
