@@ -297,7 +297,15 @@ export class BlogService {
       parentId: createCommentDto.parentId || null,
     });
 
-    return this.postCommentRepository.save(comment);
+    const saved = await this.postCommentRepository.save(comment);
+
+    // Return with user relation so frontend can display commenter immediately
+    const withUser = await this.postCommentRepository.findOne({
+      where: { id: saved.id },
+      relations: ['user'],
+    });
+
+    return withUser as PostComment;
   }
 
   async getComments(postId: string, userId?: string): Promise<PostComment[]> {
