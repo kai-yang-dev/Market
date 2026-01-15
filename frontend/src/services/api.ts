@@ -528,7 +528,7 @@ export interface Post {
   userId: string;
   content: string;
   images?: string[];
-  status: 'draft' | 'published' | 'archived';
+  status: 'pending' | 'published' | 'rejected' | 'archived';
   user?: {
     id: string;
     firstName?: string;
@@ -634,6 +634,10 @@ export const blogApi = {
   createComment: async (postId: string, data: CreateCommentData): Promise<PostComment> => {
     const response = await api.post(`/blog/${postId}/comments`, data);
     return response.data;
+  },
+
+  reportPost: async (postId: string, data: { reason: string; details?: string }): Promise<void> => {
+    await api.post(`/blog/${postId}/report`, data);
   },
 
   getComments: async (postId: string): Promise<PostComment[]> => {
