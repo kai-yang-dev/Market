@@ -21,12 +21,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
-  ChevronDown,
   Ellipsis,
   Heart,
   Image as ImageIcon,
   Loader2,
   MessageCircle,
+  PlusCircle,
   Send,
   Share2,
   X,
@@ -482,15 +482,21 @@ function Feed() {
           {/* Composer */}
           {isAuthenticated ? (
             <Card>
-              <CardHeader className="pb-3">
+              <CardHeader className="pb-6">
                 {!isCreatingPost ? (
                   <Button
                     type="button"
-                    variant="ghost"
-                    className="h-auto justify-start px-3 py-4 text-muted-foreground"
+                    variant="secondary"
+                    className="h-auto w-full justify-start gap-3 px-4 py-5 text-left shadow-sm"
                     onClick={() => setIsCreatingPost(true)}
                   >
-                    Share an update...
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <PlusCircle className="h-5 w-5" />
+                    </span>
+                    <span className="flex flex-col items-start gap-1">
+                      <span className="text-base font-semibold text-foreground">Create a post</span>
+                      <span className="text-sm text-muted-foreground">Share an update, ask a question, or add photos.</span>
+                    </span>
                   </Button>
                 ) : (
                   <div className="flex items-center justify-between">
