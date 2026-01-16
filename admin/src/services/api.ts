@@ -555,6 +555,13 @@ export interface Message {
   senderId: string
   message: string
   attachmentFiles?: string[]
+  isFraud?: boolean
+  contentHiddenForViewer?: boolean
+  fraud?: {
+    category?: string | null
+    reason?: string | null
+    confidence?: 'low' | 'medium' | 'high' | null
+  }
   sender?: {
     id: string
     firstName?: string

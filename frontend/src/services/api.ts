@@ -470,6 +470,7 @@ export interface Message {
   attachmentFiles?: string[];
   readAt?: string;
   isFraud?: boolean;
+  contentHiddenForViewer?: boolean;
   fraud?: {
     category?: string | null;
     reason?: string | null;
