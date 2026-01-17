@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { createHash, randomBytes } from 'crypto';
 import { User } from '../entities/user.entity';
 import {
   SignUpStep1Dto,
@@ -18,6 +19,7 @@ import {
   SignUpStep7Dto,
 } from './dto/sign-up.dto';
 import { SignInDto } from './dto/sign-in.dto';
+import { ForgotPasswordDto, ResetPasswordDto } from './dto/forgot-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { EmailService } from './email.service';
 // import { SmsService } from './sms.service'; // SMS phone verification disabled
@@ -404,6 +406,47 @@ export class AuthService {
       }
       throw error;
     }
+  }
+
+  async forgotPassword(dto: ForgotPasswordDto) {
+    // Always respond with success message to avoid user enumeration
+    const user = await this.userRepository.findOne({ where: { email: dto.email } });
+    if (user) {
+      const rawToken = randomBytes(32).toString('hex');
+      const hashedToken = createHash('sha256').update(rawToken).digest('hex');
+
+      user.resetPasswordToken = hashedToken;
+      user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+      await this.userRepository.save(user);
+
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const resetUrl = `${frontendUrl.replace(/\/$/, '')}/reset-password?token=${rawToken}`;
+      await this.emailService.sendPasswordResetEmail(user.email, resetUrl);
+    }
+
+    return { message: 'If that email exists, a password reset link has been sent.' };
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    const hashedToken = createHash('sha256').update(dto.token).digest('hex');
+    const now = new Date();
+
+    const user = await this.userRepository.findOne({
+      where: {
+        resetPasswordToken: hashedToken,
+      },
+    });
+
+    if (!user || !user.resetPasswordExpires || user.resetPasswordExpires.getTime() < now.getTime()) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    user.password = await bcrypt.hash(dto.password, 10);
+    user.resetPasswordToken = null;
+    user.resetPasswordExpires = null;
+    await this.userRepository.save(user);
+
+    return { message: 'Password has been reset successfully' };
   }
 
   async getProfile(userId: string) {

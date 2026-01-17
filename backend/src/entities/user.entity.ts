@@ -85,5 +85,11 @@ export class User extends BaseEntity {
 
   @Column({ name: 'last_notification_email_sent_at', type: 'timestamp', nullable: true })
   lastNotificationEmailSentAt?: Date;
+
+  @Column({ name: 'reset_password_token', type: 'varchar', length: 255, nullable: true })
+  resetPasswordToken?: string | null;
+
+  @Column({ name: 'reset_password_expires', type: 'timestamp', nullable: true })
+  resetPasswordExpires?: Date | null;
 }
 

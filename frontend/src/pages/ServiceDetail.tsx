@@ -9,6 +9,14 @@ import { showToast } from '../utils/toast'
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -33,6 +41,7 @@ import {
   MessageSquare,
   Package,
   Pencil,
+  Trash,
   Plus,
   Star,
   StarHalf,
@@ -75,6 +84,8 @@ function ServiceDetail() {
   const [currentFeedbackPage, setCurrentFeedbackPage] = useState(1)
   const [feedbacksHasMore, setFeedbacksHasMore] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [editSubmitting, setEditSubmitting] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
   const [editForm, setEditForm] = useState({
@@ -184,6 +195,22 @@ function ServiceDetail() {
       setConnectedClients([])
     } finally {
       setLoadingClients(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!service || !id) return
+    try {
+      setDeleting(true)
+      await serviceApi.delete(id)
+      showToast.success('Service deleted')
+      setDeleteModalOpen(false)
+      navigate('/services')
+    } catch (error: any) {
+      const message = error?.response?.data?.message || 'Failed to delete service'
+      showToast.error(message)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -458,10 +485,28 @@ function ServiceDetail() {
               </Badge>
             </div>
             {isProvider && !isEditing ? (
-              <div className="pt-2">
+              <div className="pt-2 flex flex-wrap gap-2">
                 <Button variant="outline" className="gap-2" onClick={startEdit}>
                   <Pencil className="h-4 w-4" />
                   Edit service
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="gap-2"
+                  onClick={() => setDeleteModalOpen(true)}
+                  disabled={deleting}
+                >
+                  {deleting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash className="h-4 w-4" />
+                      Delete service
+                    </>
+                  )}
                 </Button>
               </div>
             ) : null}
@@ -965,6 +1010,24 @@ function ServiceDetail() {
           </Card>
         </TabsContent>
       </Tabs>
+      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete service</DialogTitle>
+            <DialogDescription>
+              Deleting will remove this service from listings. Connected clients will no longer see it. Continue?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setDeleteModalOpen(false)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+              {deleting ? 'Deleting...' : 'Delete service'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
