@@ -146,6 +146,44 @@ export class EmailService {
     this.logger.warn('In development, you can use this code to verify 2FA.');
   }
 
+  async sendPasswordResetEmail(email: string, resetUrl: string) {
+    const mailOptions = {
+      from: process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@omnimart.com',
+      to: email,
+      subject: 'Reset your OmniMart password',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #10b981; font-size: 28px; margin: 0;">OmniMart</h1>
+            <p style="color: #666; font-size: 14px; margin-top: 5px;">Password Reset Request</p>
+          </div>
+          <p style="color: #333;">We received a request to reset your password.</p>
+          <p style="color: #333;">Click the button below to choose a new password:</p>
+          <p style="text-align: center; margin: 24px 0;">
+            <a href="${resetUrl}" style="background-color: #10b981; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+              Reset Password
+            </a>
+          </p>
+          <p style="color: #666; font-size: 12px;">If you didn't request a password reset, you can safely ignore this email.</p>
+          <p style="color: #666; font-size: 12px; margin-top: 24px;">This link will expire in 1 hour.</p>
+        </div>
+      `,
+    };
+
+    if (this.isConfigured && this.transporter) {
+      try {
+        await this.transporter.sendMail(mailOptions);
+        this.logger.log(`Password reset email sent to ${email}`);
+        return;
+      } catch (error) {
+        this.logger.error(`Error sending password reset email to ${email}:`, error.message);
+      }
+    }
+
+    this.logger.warn(`[DEV MODE] Email service not configured. Password reset email would be sent to ${email}`);
+    this.logger.warn(`[DEV MODE] Reset URL: ${resetUrl}`);
+  }
+
   async sendNotificationReminderEmail(
     email: string,
     lastNotification: { title: string; message: string },

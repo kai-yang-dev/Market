@@ -34,7 +34,7 @@ api.interceptors.response.use(
       const requestUrl = error.config?.url || '';
       const authHeader = (error.config?.headers as any)?.Authorization as string | undefined;
       const hasToken = !!localStorage.getItem('accessToken');
-      const isAuthRoute = ['/auth/signin', '/auth/signup', '/auth/verify-email', '/auth/verify-2fa'].some((path) =>
+      const isAuthRoute = ['/auth/signin', '/auth/signup', '/auth/verify-email', '/auth/verify-2fa', '/auth/forgot-password', '/auth/reset-password'].some((path) =>
         requestUrl.includes(path)
       );
 
@@ -225,6 +225,16 @@ export const authApi = {
 
   signIn: async (data: SignInData) => {
     const response = await api.post('/auth/signin', data);
+    return response.data;
+  },
+
+  forgotPassword: async (email: string) => {
+    const response = await api.post('/auth/forgot-password', { email });
+    return response.data;
+  },
+
+  resetPassword: async (token: string, password: string) => {
+    const response = await api.post('/auth/reset-password', { token, password });
     return response.data;
   },
 
