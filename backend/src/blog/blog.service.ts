@@ -59,6 +59,7 @@ export class BlogService {
     page: number = 1,
     limit: number = 10,
     userId?: string, // For checking if user liked posts
+    search?: string,
   ): Promise<{ data: Post[]; total: number; page: number; limit: number; totalPages: number }> {
     const queryBuilder = this.postRepository
       .createQueryBuilder('post')
@@ -66,8 +67,31 @@ export class BlogService {
       .leftJoinAndSelect('post.likes', 'likes')
       .leftJoinAndSelect('post.comments', 'comments')
       .leftJoinAndSelect('comments.user', 'commentUser')
-      .where('post.status = :status', { status: PostStatus.PUBLISHED })
-      .orderBy('post.createdAt', 'DESC');
+      .where('post.status = :status', { status: PostStatus.PUBLISHED });
+
+    if (search) {
+      // Split search query by spaces and trim each word
+      const searchWords = search
+        .trim()
+        .split(/\s+/)
+        .filter((word) => word.length > 0)
+        .map((word) => word.trim());
+
+      if (searchWords.length > 0) {
+        // For each word, create a condition that searches in content or user name
+        // All words must match (AND logic)
+        searchWords.forEach((word, index) => {
+          const paramName = `searchWord${index}`;
+          const searchPattern = `%${word}%`;
+          queryBuilder.andWhere(
+            `(post.content LIKE :${paramName} OR user.firstName LIKE :${paramName} OR user.lastName LIKE :${paramName} OR user.userName LIKE :${paramName} OR user.email LIKE :${paramName})`,
+            { [paramName]: searchPattern },
+          );
+        });
+      }
+    }
+
+    queryBuilder.orderBy('post.createdAt', 'DESC');
 
     const total = await queryBuilder.getCount();
 

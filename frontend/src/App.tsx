@@ -13,6 +13,7 @@ import CreateService from './pages/CreateService'
 import ServiceDetail from './pages/ServiceDetail'
 import ChatList from './pages/ChatList'
 import Feed from './pages/Feed'
+import FeedDetail from './pages/FeedDetail'
 import Profile from './pages/Profile'
 import Charge from './pages/Charge'
 import ChargeDetail from './pages/ChargeDetail'
@@ -47,6 +48,7 @@ function App() {
               <Routes>
                 <Route path="/" element={isAuthenticated ? <Dashboard /> : <Home />} />
                 <Route path="/feed" element={<Feed />} />
+                <Route path="/feed/:id" element={<FeedDetail />} />
                 <Route path="/services" element={<Services />} />
                 <Route path="/my-services" element={<MyServices />} />
                 <Route path="/services/new" element={<CreateService />} />

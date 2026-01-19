@@ -78,12 +78,13 @@ export class BlogController {
   async findAll(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('search') search?: string,
     @Request() req?: any,
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 10;
     const userId = req?.user?.id;
-    return this.blogService.findAll(pageNum, limitNum, userId);
+    return this.blogService.findAll(pageNum, limitNum, userId, search);
   }
 
   @Get('reports')

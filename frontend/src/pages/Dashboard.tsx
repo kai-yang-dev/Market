@@ -76,6 +76,8 @@ export default function Dashboard() {
   const [unreadCount, setUnreadCount] = useState<number | null>(null)
   const [myServices, setMyServices] = useState<Service[]>([])
   const [myServicesTotal, setMyServicesTotal] = useState<number | null>(null)
+  const [allServices, setAllServices] = useState<Service[]>([])
+  const [allServicesTotal, setAllServicesTotal] = useState<number | null>(null)
   const [referralStats, setReferralStats] = useState<Awaited<ReturnType<typeof referralApi.getMyStats>> | null>(null)
   const [myHelps, setMyHelps] = useState<HelpRequest[]>([])
   const [twoFactorEnabled, setTwoFactorEnabled] = useState<boolean | null>(null)
@@ -94,7 +96,7 @@ export default function Dashboard() {
 
   const servicesByStatus = useMemo(() => {
     const counts = { draft: 0, active: 0, blocked: 0 } as Record<"draft" | "active" | "blocked", number>
-    for (const s of myServices) {
+    for (const s of allServices) {
       const st = s.status as keyof typeof counts
       if (st in counts) counts[st] += 1
     }
@@ -103,7 +105,7 @@ export default function Dashboard() {
       { status: "active", count: counts.active },
       { status: "blocked", count: counts.blocked },
     ]
-  }, [myServices])
+  }, [allServices])
 
   const transactionsChart = useMemo(() => {
     const days = 14
@@ -155,8 +157,10 @@ export default function Dashboard() {
       const results = await Promise.allSettled([
         paymentApi.getBalance(),
         notificationApi.getUnreadCount(),
-        // Fetch enough services to produce accurate status charts (reasonable cap).
+        // Fetch user's services for "My services" section
         serviceApi.getMyServices({ page: 1, limit: 200 }),
+        // Fetch all services for "Services by status" chart (all statuses)
+        serviceApi.getAllPaginated({ page: 1, limit: 1000 }),
         paymentApi.getTransactions({ page: 1, limit: 200 }),
         referralApi.getMyStats(),
         helpApi.getMy(),
@@ -165,13 +169,17 @@ export default function Dashboard() {
 
       if (!mounted) return
 
-      const [bal, unread, mySvc, txs, refStats, helps, twofa] = results
+      const [bal, unread, mySvc, allSvc, txs, refStats, helps, twofa] = results
 
       if (bal.status === "fulfilled") setBalance(Number(bal.value.amount))
       if (unread.status === "fulfilled") setUnreadCount(Number(unread.value.count))
       if (mySvc.status === "fulfilled") {
         setMyServices(Array.isArray(mySvc.value.data) ? mySvc.value.data : [])
         setMyServicesTotal(Number(mySvc.value.total ?? 0))
+      }
+      if (allSvc.status === "fulfilled") {
+        setAllServices(Array.isArray(allSvc.value.data) ? allSvc.value.data : [])
+        setAllServicesTotal(Number(allSvc.value.total ?? 0))
       }
       if (txs.status === "fulfilled") {
         setRecentTransactions(Array.isArray(txs.value.data) ? txs.value.data : [])
@@ -306,18 +314,14 @@ export default function Dashboard() {
         <Card>
           <CardHeader>
             <CardTitle>Services by status</CardTitle>
-            <CardDescription>How your listings are currently distributed.</CardDescription>
+            <CardDescription>Distribution of all services on the platform.</CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
               <div className="text-sm text-muted-foreground">Loading…</div>
-            ) : myServicesTotal === 0 ? (
+            ) : (allServicesTotal === 0 || allServicesTotal === null) ? (
               <div className="text-sm text-muted-foreground">
-                No services yet.{" "}
-                <Link className="text-primary hover:underline" to="/services/new">
-                  Create your first service
-                </Link>
-                .
+                No services found on the platform.
               </div>
             ) : (
               <ChartContainer config={servicesChartConfig} className="h-[260px] w-full">
