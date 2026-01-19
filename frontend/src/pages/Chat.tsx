@@ -298,13 +298,29 @@ function Chat() {
       if (socket.connected) {
         socket.emit('join_conversation', { conversationId: id })
       } else {
-        socket.once('connect', () => {
-          socket.emit('join_conversation', { conversationId: id })
-        })
+        // Ensure we join when connected
+        const onConnect = () => {
+          if (socket && id) {
+            socket.emit('join_conversation', { conversationId: id })
+          }
+        }
+        socket.once('connect', onConnect)
+        // Also try to connect if not already connected
+        if (!socket.connected) {
+          socket.connect()
+        }
       }
     }
 
     setupSocket()
+    
+    // Re-join conversation on reconnect
+    const handleReconnect = () => {
+      if (socket && socket.connected && id) {
+        socket.emit('join_conversation', { conversationId: id })
+      }
+    }
+    socket.on('reconnect', handleReconnect)
 
     // Listen for new messages
     const handleNewMessage = (message: Message) => {
@@ -337,9 +353,14 @@ function Chat() {
           return newMessages
         }
         
-        // Add new message
+        // Add new message - ensure it's added immediately
         return [...prev, message]
       })
+      
+      // Mark messages as read when new message arrives in current conversation
+      if (message.senderId !== user?.id) {
+        markMessagesAsRead()
+      }
     }
 
     // Follow-up fraud flag after message is sent
@@ -482,6 +503,11 @@ function Chat() {
             return msg;
           }),
         );
+        
+        // Immediately notify ChatList to clear badge when messages are read
+        if (data.messageIds && data.messageIds.length > 0) {
+          window.dispatchEvent(new CustomEvent('conversation-viewed', { detail: { conversationId: id } }))
+        }
       }
     }
 
@@ -538,6 +564,7 @@ function Chat() {
         socket.off('joined_conversation')
         socket.off('error')
         socket.off('connect_error')
+        socket.off('reconnect', handleReconnect)
         socket.emit('leave_conversation', { conversationId: id })
       }
       if (typingTimeoutRef.current) {
@@ -632,8 +659,10 @@ function Chat() {
           conversationId: id,
           messageIds: unreadMessageIds,
         })
+        // Immediately notify ChatList to clear badge
+        window.dispatchEvent(new CustomEvent('conversation-viewed', { detail: { conversationId: id } }))
       }
-    }, 500) // Reduced delay for faster real-time updates
+    }, 100) // Immediate marking for faster badge updates
   }
 
   // Handle typing indicator

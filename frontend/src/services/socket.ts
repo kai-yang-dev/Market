@@ -33,13 +33,16 @@ export const getSocket = (): Socket | null => {
       query: {
         token: token, // Also send as query parameter as fallback
       },
-      transports: ['polling', 'websocket'], // Try polling first, then websocket
+      transports: ['websocket', 'polling'], // Try websocket first for better performance, fallback to polling
       reconnection: true,
       reconnectionDelay: 1000,
-      reconnectionAttempts: 5,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: Infinity, // Keep trying to reconnect
+      timeout: 20000, // Increase timeout for production
       forceNew: false,
       withCredentials: true,
       autoConnect: true,
+      upgrade: true, // Allow transport upgrade
     });
 
     socket.on('connect', () => {

@@ -328,9 +328,9 @@ function ChatList() {
                             </AvatarFallback>
                           </Avatar>
 
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
+                          <div className="min-w-0 flex-1 overflow-hidden">
+                            <div className="flex items-start justify-between gap-2 min-w-0">
+                              <div className="min-w-0 flex-1 overflow-hidden">
                                 <div className={cn("truncate text-sm font-semibold", isUnread && "text-foreground")}>
                                   {otherUserName}
                                 </div>
@@ -341,14 +341,14 @@ function ChatList() {
                                 ) : null}
                               </div>
 
-                              <div className="flex shrink-0 flex-col items-end gap-1">
+                              <div className="flex shrink-0 flex-col items-end gap-1 ml-2">
                                 {conversation.lastMessage ? (
-                                  <span className="text-[11px] text-muted-foreground">
+                                  <span className="text-[11px] text-muted-foreground whitespace-nowrap">
                                     {formatTime(conversation.lastMessage.createdAt)}
                                   </span>
                                 ) : null}
                                 {(conversation.unreadCount ?? 0) > 0 ? (
-                                  <Badge className="h-5 min-w-5 px-1.5 flex items-center justify-center text-[10px] font-semibold bg-primary text-primary-foreground">
+                                  <Badge className="h-5 min-w-5 px-1.5 flex items-center justify-center text-[10px] font-semibold bg-primary text-primary-foreground shrink-0">
                                     {conversation.unreadCount! > 99 ? '99+' : conversation.unreadCount}
                                   </Badge>
                                 ) : null}
