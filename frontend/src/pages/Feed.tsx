@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { useAppSelector } from "../store/hooks"
 import { blogApi, Post, PostComment } from "../services/api"
 import { showToast } from "../utils/toast"
@@ -40,7 +41,10 @@ import {
   Send,
   Share2,
   X,
+  Search,
 } from "lucide-react"
+import ReactQuill from 'react-quill'
+import 'react-quill/dist/quill.snow.css'
 
 function formatTimeAgo(dateString: string) {
   const date = new Date(dateString)
@@ -68,7 +72,55 @@ function extractHashtags(text: string): string[] {
   return matches.map((t) => t.toLowerCase())
 }
 
+// Helper function to parse post content and extract title
+function parsePostContent(content: string): { title: string; body: string } {
+  if (!content) return { title: '', body: '' }
+  
+  // Check if content starts with <p><strong>...</strong></p> (title formatted as bold paragraph)
+  const titleMatch1 = content.match(/^<p><strong>(.*?)<\/strong><\/p>(.*)$/s)
+  if (titleMatch1) {
+    const titleText = titleMatch1[1].replace(/<[^>]*>/g, '').trim()
+    const bodyContent = titleMatch1[2].trim()
+    if (titleText) {
+      return { title: titleText, body: bodyContent || '' }
+    }
+  }
+  
+  // Check if content starts with <p><strong>...</strong> (without closing </p>)
+  const titleMatch2 = content.match(/^<p><strong>(.*?)<\/strong>(.*?)(<\/p>.*)$/s)
+  if (titleMatch2) {
+    const titleText = titleMatch2[1].replace(/<[^>]*>/g, '').trim()
+    const bodyContent = (titleMatch2[2] + titleMatch2[3]).trim()
+    if (titleText) {
+      return { title: titleText, body: bodyContent || '' }
+    }
+  }
+  
+  // Check if content starts with <strong>...</strong> (direct bold)
+  const boldMatch = content.match(/^<strong>(.*?)<\/strong>(.*)$/s)
+  if (boldMatch) {
+    const titleText = boldMatch[1].replace(/<[^>]*>/g, '').trim()
+    const bodyContent = boldMatch[2].trim()
+    if (titleText && bodyContent) {
+      return { title: titleText, body: bodyContent }
+    }
+  }
+  
+  // No title found, return empty title and full content as body
+  return { title: '', body: content }
+}
+
+// Helper function to check if content needs truncation
+function needsTruncation(html: string): boolean {
+  if (!html) return false
+  // Simple check: count approximate lines based on content length
+  // A rough estimate: 50-60 characters per line for mobile, 70-80 for desktop
+  const textContent = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ')
+  return textContent.length > 120 // Roughly 2-3 lines
+}
+
 const PostCard = ({ post, onLike }: { post: Post; onLike: (postId: string) => void }) => {
+  const navigate = useNavigate()
   const [showComments, setShowComments] = useState(false)
   const [comments, setComments] = useState<PostComment[]>([])
   const [loadingComments, setLoadingComments] = useState(false)
@@ -79,6 +131,18 @@ const PostCard = ({ post, onLike }: { post: Post; onLike: (postId: string) => vo
   const [reportDetails, setReportDetails] = useState('')
   const [submittingReport, setSubmittingReport] = useState(false)
   const { isAuthenticated } = useAppSelector((state) => state.auth)
+  
+  const { title, body } = useMemo(() => parsePostContent(post.content || ''), [post.content])
+  const shouldTruncate = useMemo(() => needsTruncation(body), [body])
+  
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Don't navigate if clicking on links, buttons, or other interactive elements
+    const target = e.target as HTMLElement
+    if (target.closest('button, a, [role="button"], input, textarea')) {
+      return
+    }
+    navigate(`/feed/${post.id}`)
+  }
 
   const toggleComments = async () => {
     const nextOpen = !showComments
@@ -147,7 +211,11 @@ const PostCard = ({ post, onLike }: { post: Post; onLike: (postId: string) => vo
 
   return (
     <>
-      <Card id={`post-${post.id}`} className="overflow-hidden">
+      <Card 
+        id={`post-${post.id}`} 
+        className="overflow-hidden cursor-pointer hover:bg-accent/50 transition-colors"
+        onClick={handleCardClick}
+      >
         <CardHeader className="space-y-3 pb-3">
         <div className="flex items-start gap-3">
           <Avatar className="h-10 w-10">
@@ -195,8 +263,17 @@ const PostCard = ({ post, onLike }: { post: Post; onLike: (postId: string) => vo
             </div>
           </div>
         </div>
-        <div className="whitespace-pre-wrap break-words text-sm text-foreground">
-          {post.content}
+        {title && (
+          <div className="font-bold text-base text-foreground mb-2">
+            {title}
+          </div>
+        )}
+        <div 
+          className={`text-sm text-foreground prose prose-sm max-w-none break-words ${
+            shouldTruncate ? 'line-clamp-2' : ''
+          }`}
+        >
+          <div dangerouslySetInnerHTML={{ __html: body || '' }} />
         </div>
       </CardHeader>
 
@@ -421,22 +498,53 @@ function Feed() {
   const [hasMore, setHasMore] = useState(true)
   const [feedTab, setFeedTab] = useState<"for-you" | "top">("for-you")
   const [activeTag, setActiveTag] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [postTitle, setPostTitle] = useState('')
   const [postContent, setPostContent] = useState('')
   const [postImages, setPostImages] = useState<File[]>([])
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const [isCreatingPost, setIsCreatingPost] = useState(false)
   const [submittingPost, setSubmittingPost] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  const quillModules = {
+    toolbar: [
+      [{ 'header': [1, 2, 3, false] }],
+      ['bold', 'italic', 'underline', 'strike'],
+      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+      ['link'],
+      ['clean']
+    ],
+  }
 
   useEffect(() => {
-    fetchPosts()
-  }, [])
+    setPage(1) // Reset to first page when search changes
+    if (activeTag) {
+      setActiveTag(null) // Clear tag filter when searching
+    }
+  }, [searchTerm])
 
-  const fetchPosts = async (pageNum: number = 1) => {
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetchPosts()
+    }, searchTerm ? 500 : 0) // Debounce search by 500ms
+    return () => clearTimeout(timeoutId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, searchTerm])
+
+  const fetchPosts = async (pageNum?: number) => {
+    const pageToFetch = pageNum ?? page
     try {
       setLoading(true)
-      const response = await blogApi.getAll({ page: pageNum, limit: 10 })
-      if (pageNum === 1) {
+      const params: any = {
+        page: pageToFetch,
+        limit: 10,
+      }
+      if (searchTerm.trim()) {
+        params.search = searchTerm.trim()
+      }
+      const response = await blogApi.getAll(params)
+      if (pageToFetch === 1) {
         setPosts(response.data)
       } else {
         setPosts((prev) => [...prev, ...response.data])
@@ -487,11 +595,21 @@ function Feed() {
   }
 
   const handleCreatePost = async () => {
-    if (!postContent.trim() || !isAuthenticated) return
+    if ((!postContent.trim() && !postTitle.trim()) || !isAuthenticated) return
 
     setSubmittingPost(true)
     try {
-      await blogApi.create({ content: postContent.trim() }, postImages.length > 0 ? postImages : undefined)
+      // Combine title (as bold) and content
+      let finalContent = ''
+      if (postTitle.trim()) {
+        finalContent = `<p><strong>${postTitle.trim()}</strong></p>`
+      }
+      if (postContent.trim()) {
+        finalContent += postContent.trim()
+      }
+      
+      await blogApi.create({ content: finalContent }, postImages.length > 0 ? postImages : undefined)
+      setPostTitle('')
       setPostContent('')
       setPostImages([])
       setImagePreviews([])
@@ -507,9 +625,7 @@ function Feed() {
 
   const loadMore = () => {
     if (!loading && hasMore) {
-      const nextPage = page + 1
-      setPage(nextPage)
-      fetchPosts(nextPage)
+      setPage((prev) => prev + 1)
     }
   }
 
@@ -562,6 +678,18 @@ function Feed() {
             </Tabs>
           </div>
 
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search posts by content or author..."
+              className="pl-10"
+            />
+          </div>
+
           {/* Composer */}
           {isAuthenticated ? (
             <Card>
@@ -584,31 +712,49 @@ function Feed() {
                 ) : (
                   <div className="flex items-center justify-between">
                     <div className="text-sm font-semibold">Create post</div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setIsCreatingPost(false)
-                        setPostContent("")
-                        setPostImages([])
-                        setImagePreviews([])
-                      }}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setIsCreatingPost(false)
+                          setPostTitle("")
+                          setPostContent("")
+                          setPostImages([])
+                          setImagePreviews([])
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
                   </div>
                 )}
               </CardHeader>
 
               {isCreatingPost ? (
                 <CardContent className="space-y-4">
-                  <Textarea
-                    value={postContent}
-                    onChange={(e) => setPostContent(e.target.value)}
-                    placeholder="Write something..."
-                    rows={4}
-                  />
+                  <div className="space-y-2">
+                    <Label htmlFor="post-title">Title</Label>
+                    <Input
+                      id="post-title"
+                      value={postTitle}
+                      onChange={(e) => setPostTitle(e.target.value)}
+                      placeholder="Enter post title..."
+                      className="font-semibold"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="post-content">Content</Label>
+                    <div className="min-h-[200px]">
+                      <ReactQuill
+                        theme="snow"
+                        value={postContent}
+                        onChange={setPostContent}
+                        placeholder="Write your post content... (You can make text bold using the toolbar)"
+                        modules={quillModules}
+                        className="bg-background"
+                      />
+                    </div>
+                  </div>
 
                   {imagePreviews.length > 0 ? (
                     <div className="grid grid-cols-3 gap-2">
@@ -652,6 +798,7 @@ function Feed() {
                         variant="outline"
                         onClick={() => {
                           setIsCreatingPost(false)
+                          setPostTitle("")
                           setPostContent("")
                           setPostImages([])
                           setImagePreviews([])
@@ -659,7 +806,7 @@ function Feed() {
                       >
                         Cancel
                       </Button>
-                      <Button type="button" disabled={!postContent.trim() || submittingPost} className="gap-2" onClick={() => void handleCreatePost()}>
+                      <Button type="button" disabled={(!postContent.trim() && !postTitle.trim()) || submittingPost} className="gap-2" onClick={() => void handleCreatePost()}>
                         {submittingPost ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                         {submittingPost ? "Posting..." : "Post"}
                       </Button>

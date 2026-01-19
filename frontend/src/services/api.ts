@@ -606,6 +606,7 @@ export const blogApi = {
   getAll: async (params?: {
     page?: number;
     limit?: number;
+    search?: string;
   }): Promise<{ data: Post[]; total: number; page: number; limit: number; totalPages: number }> => {
     const response = await api.get('/blog', { params });
     return response.data;
