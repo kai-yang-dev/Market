@@ -199,6 +199,15 @@ function ChatList() {
     return message.message
   }
 
+  const formatServiceTitle = (title?: string): string => {
+    if (!title) return ''
+    const maxLength = 32
+    if (title.length > maxLength) {
+      return title.substring(0, maxLength) + '...'
+    }
+    return title
+  }
+
   const formatTime = (dateString: string): string => {
     const date = new Date(dateString)
     const now = new Date()
@@ -335,8 +344,8 @@ function ChatList() {
                                   {otherUserName}
                                 </div>
                                 {conversation.service?.title ? (
-                                  <div className="truncate text-xs text-muted-foreground">
-                                    {conversation.service.title}
+                                  <div className="truncate text-xs text-muted-foreground" title={conversation.service.title}>
+                                    {formatServiceTitle(conversation.service.title)}
                                   </div>
                                 ) : null}
                               </div>
