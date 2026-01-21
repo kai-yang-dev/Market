@@ -16,8 +16,8 @@ export class AdminInitService implements OnModuleInit {
   }
 
   private async initializeAdmin() {
-    const adminEmail = 'admin@omnimart.com';
-    const adminPassword = '12345678';
+    const adminEmail = 'admin@omni-mart.net';
+    const adminPassword = 'adminp@ssw0rd';
 
     const existingAdmin = await this.userRepository.findOne({
       where: { email: adminEmail },
@@ -49,7 +49,7 @@ export class AdminInitService implements OnModuleInit {
     });
 
     await this.userRepository.save(admin);
-    console.log('Admin user created with email: admin@omnimart.com');
+    console.log('Admin user created with email: admin@omni-mart.net');
   }
 }
 
