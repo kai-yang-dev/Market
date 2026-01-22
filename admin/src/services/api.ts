@@ -108,6 +108,14 @@ export interface TempWalletBalances {
   gasBalance: number;
 }
 
+export interface WithdrawListResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 export const adminApi = {
   signIn: async (data: AdminSignInData) => {
     const response = await api.post('/admin/signin', data);
@@ -146,8 +154,8 @@ export const adminApi = {
     return response.data;
   },
 
-  getWithdraws: async () => {
-    const response = await api.get('/admin/withdraws');
+  getWithdraws: async (params?: { page?: number; limit?: number }) => {
+    const response = await api.get('/admin/withdraws', { params });
     return response.data;
   },
 

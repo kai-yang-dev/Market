@@ -21,8 +21,10 @@ export class AdminController {
 
   @UseGuards(AdminGuard)
   @Get('withdraws')
-  async getWithdraws() {
-    return this.adminService.getWithdraws();
+  async getWithdraws(@Query('page') page?: string, @Query('limit') limit?: string) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 10;
+    return this.adminService.getWithdraws(pageNum, limitNum);
   }
 
   @UseGuards(AdminGuard)

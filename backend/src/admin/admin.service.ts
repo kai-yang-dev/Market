@@ -144,14 +144,26 @@ export class AdminService {
     };
   }
 
-  async getWithdraws() {
-    const withdraws = await this.transactionRepository.find({
+  async getWithdraws(
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<{ data: Transaction[]; total: number; page: number; limit: number; totalPages: number }> {
+    const skip = (page - 1) * limit;
+    const [withdraws, total] = await this.transactionRepository.findAndCount({
       where: { type: TransactionType.WITHDRAW },
       relations: ['client'],
       order: { createdAt: 'DESC' },
+      skip,
+      take: limit,
     });
 
-    return withdraws;
+    return {
+      data: withdraws,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async acceptWithdraw(withdrawId: string) {
