@@ -32,9 +32,7 @@ export class PolygonWalletService {
   private getPolygonUsdcAddress(): string {
     // Mainnet USDC on Polygon (6 decimals)
     // https://polygonscan.com/token/0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174
-    return (
-      process.env.POLYGON_USDC_CONTRACT_ADDRESS
-    );
+    return '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359';
   }
 
   private getPolygonUsdcContract(signerOrProvider: ethers.Signer | ethers.Provider) {

@@ -238,8 +238,8 @@ export class AdminService {
     return walletsWithBalances;
   }
 
-  // Fetch full balances for a single temp wallet on-demand (used by the admin transfer dialog).
-  async getTempWalletBalances(walletId: string) {
+  // Fetch balances for a single temp wallet on-demand (used by the admin temp wallet list).
+  async getTempWalletBalances(walletId: string, asset?: 'token' | 'gas') {
     const wallet = await this.tempWalletRepository.findOne({
       where: { id: walletId },
     });
@@ -249,10 +249,8 @@ export class AdminService {
     }
 
     if (wallet.network === WalletNetwork.TRON) {
-      const [usdt, trx] = await Promise.all([
-        this.walletService.getUSDTBalance(wallet.address),
-        this.walletService.getTRXBalance(wallet.address),
-      ]);
+      const usdt = asset === 'gas' ? 0 : await this.walletService.getUSDTBalance(wallet.address);
+      const trx = asset === 'token' ? 0 : await this.walletService.getTRXBalance(wallet.address);
       return {
         walletId: wallet.id,
         network: wallet.network,
@@ -265,10 +263,8 @@ export class AdminService {
     }
 
     if (wallet.network === WalletNetwork.POLYGON) {
-      const [usdc, matic] = await Promise.all([
-        this.polygonWalletService.getUSDCBalance(wallet.address),
-        this.polygonWalletService.getMATICBalance(wallet.address),
-      ]);
+      const usdc = asset === 'gas' ? 0 : await this.polygonWalletService.getUSDCBalance(wallet.address);
+      const matic = asset === 'token' ? 0 : await this.polygonWalletService.getMATICBalance(wallet.address);
       return {
         walletId: wallet.id,
         network: wallet.network,
