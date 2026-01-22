@@ -9,6 +9,7 @@ import ServiceDetail from './pages/ServiceDetail'
 import Blog from './pages/Blog'
 import TempWallets from './pages/TempWallets'
 import Withdraws from './pages/Withdraws'
+import MasterWalletTransactions from './pages/MasterWalletTransactions'
 import BroadcastNotification from './pages/BroadcastNotification'
 import Disputes from './pages/Disputes'
 import Chat from './pages/Chat'
@@ -98,6 +99,13 @@ function App() {
           <PrivateRoute>
             <Layout>
               <Withdraws />
+            </Layout>
+          </PrivateRoute>
+        } />
+        <Route path="/master-wallet" element={
+          <PrivateRoute>
+            <Layout>
+              <MasterWalletTransactions />
             </Layout>
           </PrivateRoute>
         } />
