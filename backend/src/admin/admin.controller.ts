@@ -3,6 +3,7 @@ import { AdminService } from './admin.service';
 import { AdminSignInDto } from './dto/admin-signin.dto';
 import { AdminGuard } from './guards/admin.guard';
 import { CreateNotificationDto } from '../notification/dto/create-notification.dto';
+import { PaymentNetwork, TransactionStatus, TransactionType } from '../entities/transaction.entity';
 
 @Controller('admin')
 export class AdminController {
@@ -25,6 +26,20 @@ export class AdminController {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 10;
     return this.adminService.getWithdraws(pageNum, limitNum);
+  }
+
+  @UseGuards(AdminGuard)
+  @Get('master-wallet/transactions')
+  async getMasterWalletTransactions(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('type') type?: TransactionType,
+    @Query('status') status?: TransactionStatus,
+    @Query('paymentNetwork') paymentNetwork?: PaymentNetwork,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 10;
+    return this.adminService.getMasterWalletTransactions(pageNum, limitNum, type, status, paymentNetwork);
   }
 
   @UseGuards(AdminGuard)

@@ -11,7 +11,7 @@ import { Repository, DataSource } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { User } from '../entities/user.entity';
-import { Transaction, TransactionType, TransactionStatus } from '../entities/transaction.entity';
+import { Transaction, TransactionType, TransactionStatus, PaymentNetwork } from '../entities/transaction.entity';
 import { TempWallet, WalletNetwork } from '../entities/temp-wallet.entity';
 import { AdminSignInDto } from './dto/admin-signin.dto';
 import { PaymentService } from '../payment/payment.service';
@@ -159,6 +159,48 @@ export class AdminService {
 
     return {
       data: withdraws,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async getMasterWalletTransactions(
+    page: number = 1,
+    limit: number = 10,
+    type?: TransactionType,
+    status?: TransactionStatus,
+    paymentNetwork?: PaymentNetwork,
+  ): Promise<{ data: Transaction[]; total: number; page: number; limit: number; totalPages: number }> {
+    const skip = (page - 1) * limit;
+    const queryBuilder = this.transactionRepository
+      .createQueryBuilder('transaction')
+      .leftJoinAndSelect('transaction.client', 'client')
+      .leftJoinAndSelect('transaction.provider', 'provider')
+      .where('transaction.paymentNetwork IS NOT NULL');
+
+    if (type) {
+      queryBuilder.andWhere('transaction.type = :type', { type });
+    }
+
+    if (status) {
+      queryBuilder.andWhere('transaction.status = :status', { status });
+    }
+
+    if (paymentNetwork) {
+      queryBuilder.andWhere('transaction.paymentNetwork = :paymentNetwork', { paymentNetwork });
+    }
+
+    const total = await queryBuilder.getCount();
+    const transactions = await queryBuilder
+      .orderBy('transaction.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit)
+      .getMany();
+
+    return {
+      data: transactions,
       total,
       page,
       limit,

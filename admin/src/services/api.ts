@@ -116,6 +116,41 @@ export interface WithdrawListResponse<T> {
   totalPages: number;
 }
 
+export interface MasterWalletTransaction {
+  id: string;
+  type: 'charge' | 'withdraw' | 'milestone_payment' | 'platform_fee';
+  status: 'draft' | 'pending' | 'success' | 'failed' | 'cancelled' | 'withdraw';
+  amount: number;
+  transactionHash?: string;
+  walletAddress?: string;
+  description?: string;
+  paymentNetwork?: 'USDT_TRC20' | 'USDC_POLYGON';
+  client?: {
+    id: string;
+    email: string;
+    userName?: string;
+    firstName?: string;
+    lastName?: string;
+  } | null;
+  provider?: {
+    id: string;
+    email: string;
+    userName?: string;
+    firstName?: string;
+    lastName?: string;
+  } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MasterWalletTransactionListResponse {
+  data: MasterWalletTransaction[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 export const adminApi = {
   signIn: async (data: AdminSignInData) => {
     const response = await api.post('/admin/signin', data);
@@ -156,6 +191,17 @@ export const adminApi = {
 
   getWithdraws: async (params?: { page?: number; limit?: number }) => {
     const response = await api.get('/admin/withdraws', { params });
+    return response.data;
+  },
+
+  getMasterWalletTransactions: async (params?: {
+    page?: number;
+    limit?: number;
+    type?: MasterWalletTransaction['type'];
+    status?: MasterWalletTransaction['status'];
+    paymentNetwork?: NonNullable<MasterWalletTransaction['paymentNetwork']>;
+  }): Promise<MasterWalletTransactionListResponse> => {
+    const response = await api.get('/admin/master-wallet/transactions', { params });
     return response.data;
   },
 
