@@ -169,12 +169,18 @@ function Layout({ children }: LayoutProps) {
           ? `${message.sender.firstName || ''} ${message.sender.lastName || ''}`.trim() || message.sender.userName || 'Someone'
           : 'Someone'
 
-        showToast.info(
-          <div onClick={() => navigate(`/chat/${message.conversationId}`)} className="cursor-pointer">
-            <p className="font-semibold">{senderName}</p>
-            <p className="text-sm truncate">{message.message}</p>
-          </div>
-        )
+        // Show toast notification if user is actively viewing
+        if (!document.hidden && document.hasFocus()) {
+          showToast.info(
+            <div onClick={() => navigate(`/chat/${message.conversationId}`)} className="cursor-pointer">
+              <p className="font-semibold">{senderName}</p>
+              <p className="text-sm truncate">{message.message}</p>
+            </div>
+          )
+        }
+
+        // Show browser/push notification if tab is hidden or window is unfocused
+        notificationService.handleChatMessage(message)
         
         // Update unread count
         setTotalUnreadMessages((prev) => prev + 1)
