@@ -32,19 +32,27 @@ class NotificationService {
         scope: '/'
       });
 
-      console.log('Service Worker registered:', this.registration);
+      console.log('✅ Service Worker registered successfully:', this.registration);
 
       // Request notification permission
-      await this.requestPermission();
+      const permission = await this.requestPermission();
+      console.log('Notification permission:', permission);
 
       // Subscribe to push notifications if permission granted
-      if (this.permission === 'granted') {
-        await this.subscribeToPush();
+      if (permission === 'granted') {
+        const subscription = await this.subscribeToPush();
+        if (subscription) {
+          console.log('✅ Push subscription successful');
+        } else {
+          console.warn('⚠️ Push subscription failed');
+        }
+      } else {
+        console.warn('⚠️ Notification permission not granted:', permission);
       }
 
       return true;
     } catch (error) {
-      console.error('Error initializing notifications:', error);
+      console.error('❌ Error initializing notifications:', error);
       return false;
     }
   }
@@ -198,14 +206,32 @@ class NotificationService {
   }
 
   showBrowserNotification(title: string, options: NotificationOptions) {
-    if (this.permission !== 'granted') {
+    // Check current permission status (it might have changed)
+    const currentPermission = Notification.permission;
+    
+    if (currentPermission !== 'granted') {
+      console.warn('Notification permission not granted:', currentPermission);
       return;
     }
 
-    if (this.registration) {
-      this.registration.showNotification(title, options);
-    } else {
-      new Notification(title, options);
+    // Update internal permission state
+    this.permission = currentPermission;
+
+    try {
+      if (this.registration) {
+        this.registration.showNotification(title, options).catch((error) => {
+          console.error('Error showing notification via service worker:', error);
+          // Fallback to direct notification if service worker fails
+          if (currentPermission === 'granted') {
+            new Notification(title, options);
+          }
+        });
+      } else {
+        // Fallback to direct notification if service worker not registered
+        new Notification(title, options);
+      }
+    } catch (error) {
+      console.error('Error showing notification:', error);
     }
   }
 
@@ -226,6 +252,13 @@ class NotificationService {
       return; // User is actively viewing the site
     }
 
+    // Check permission again (it might have changed)
+    const currentPermission = Notification.permission;
+    if (currentPermission !== 'granted') {
+      console.log('Notification permission not granted, skipping notification');
+      return;
+    }
+
     const senderName = message.sender
       ? `${message.sender.firstName || ''} ${message.sender.lastName || ''}`.trim() || message.sender.userName || 'Someone'
       : 'Someone';
@@ -244,6 +277,7 @@ class NotificationService {
       silent: false,
     };
 
+    console.log('Showing browser notification for message:', { senderName, conversationId: message.conversationId });
     this.showBrowserNotification(senderName, notificationOptions);
   }
 
