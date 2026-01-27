@@ -5,6 +5,7 @@ import { logout, updateUser } from '../store/slices/authSlice'
 import { showToast } from '../utils/toast'
 import { getSocket, disconnectSocket } from '../services/socket'
 import { Message, paymentApi, Balance, Notification, authApi, conversationApi, Conversation } from '../services/api'
+import { notificationService } from '../services/notificationService'
 import { Socket } from 'socket.io-client'
 import Footer from './Footer'
 import NotificationDropdown from './NotificationDropdown'
@@ -169,12 +170,18 @@ function Layout({ children }: LayoutProps) {
           ? `${message.sender.firstName || ''} ${message.sender.lastName || ''}`.trim() || message.sender.userName || 'Someone'
           : 'Someone'
 
-        showToast.info(
-          <div onClick={() => navigate(`/chat/${message.conversationId}`)} className="cursor-pointer">
-            <p className="font-semibold">{senderName}</p>
-            <p className="text-sm truncate">{message.message}</p>
-          </div>
-        )
+        // Show toast notification if user is actively viewing
+        if (!document.hidden && document.hasFocus()) {
+          showToast.info(
+            <div onClick={() => navigate(`/chat/${message.conversationId}`)} className="cursor-pointer">
+              <p className="font-semibold">{senderName}</p>
+              <p className="text-sm truncate">{message.message}</p>
+            </div>
+          )
+        }
+
+        // Show browser/push notification if tab is hidden or window is unfocused
+        notificationService.handleChatMessage(message)
         
         // Update unread count
         setTotalUnreadMessages((prev) => prev + 1)
