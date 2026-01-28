@@ -14,6 +14,7 @@ import { NotificationModule } from '../notification/notification.module';
 import { ConversationModule } from '../conversation/conversation.module';
 import { MilestoneModule } from '../milestone/milestone.module';
 import { PolygonWalletModule } from '../polygon-wallet/polygon-wallet.module';
+import { ChatModule } from '../chat/chat.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { PolygonWalletModule } from '../polygon-wallet/polygon-wallet.module';
     forwardRef(() => NotificationModule),
     forwardRef(() => ConversationModule),
     forwardRef(() => MilestoneModule),
+    forwardRef(() => ChatModule),
   ],
   controllers: [AdminController],
   providers: [AdminService, AdminInitService],

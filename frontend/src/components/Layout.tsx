@@ -201,15 +201,24 @@ function Layout({ children }: LayoutProps) {
       }
     }
 
+    const handleAccountBlocked = (data: { message: string }) => {
+      disconnectSocket()
+      dispatch(logout())
+      showToast.error(data.message || 'Your account is blocked')
+      navigate('/signin')
+    }
+
     socket.on('new_message', handleNewMessage)
     socket.on('balance_updated', handleBalanceUpdate)
     socket.on('new_notification', handleNewNotification)
+    socket.on('account_blocked', handleAccountBlocked)
 
     return () => {
       if (socketRef.current) {
-        socketRef.current.off('new_message', handleNewMessage)
-        socketRef.current.off('balance_updated', handleBalanceUpdate)
-        socketRef.current.off('new_notification', handleNewNotification)
+      socketRef.current.off('new_message', handleNewMessage)
+      socketRef.current.off('balance_updated', handleBalanceUpdate)
+      socketRef.current.off('new_notification', handleNewNotification)
+      socketRef.current.off('account_blocked', handleAccountBlocked)
       }
     }
   }, [isAuthenticated, user, location.pathname, navigate])

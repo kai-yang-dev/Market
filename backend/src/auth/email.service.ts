@@ -240,5 +240,74 @@ export class EmailService {
     this.logger.warn(`[DEV MODE] Last Notification: ${lastNotification.title} - ${lastNotification.message}`);
     this.logger.warn(`[DEV MODE] Unread Count: ${unreadCount}`);
   }
+
+  async sendUnblockRequestEmail(userEmail: string, title: string, message: string) {
+    const supportEmail = 'support@omni-mart.net';
+    // Use configured SMTP email as sender, not user's email (SMTP restrictions)
+    const fromEmail = process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@omnimart.com';
+    const mailOptions = {
+      from: fromEmail, // Send from configured SMTP email
+      to: supportEmail,
+      replyTo: userEmail, // Allow support to reply directly to user
+      subject: `[Unblock Request] ${title}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #10b981; font-size: 28px; margin: 0;">OmniMart</h1>
+            <p style="color: #666; font-size: 14px; margin-top: 5px;">Account Unblock Request</p>
+          </div>
+          <div style="background-color: #f4f4f4; padding: 20px; border-radius: 4px; margin: 20px 0;">
+            <p style="color: #333; margin: 0 0 10px 0;"><strong>Request From:</strong> ${userEmail}</p>
+            <p style="color: #333; margin: 0 0 10px 0;"><strong>Subject:</strong> ${title}</p>
+            <p style="color: #333; margin: 0;"><strong>Message:</strong></p>
+            <div style="background-color: white; padding: 15px; margin-top: 10px; border-radius: 4px; white-space: pre-wrap;">
+              ${message}
+            </div>
+          </div>
+          <p style="color: #666; font-size: 12px; margin-top: 30px;">
+            This is an automated email from the OmniMart platform. Please review this unblock request.<br/>
+            You can reply directly to this email to contact the user at ${userEmail}.
+          </p>
+        </div>
+      `,
+      text: `
+Account Unblock Request
+
+Request From: ${userEmail}
+Subject: ${title}
+
+Message:
+${message}
+
+---
+This is an automated email from the OmniMart platform.
+You can reply directly to this email to contact the user at ${userEmail}.
+      `,
+    };
+
+    // If email service is configured, send the email
+    if (this.isConfigured && this.transporter) {
+      try {
+        await this.transporter.sendMail(mailOptions);
+        this.logger.log(`Unblock request email sent from ${userEmail} to ${supportEmail}`);
+        return;
+      } catch (error) {
+        this.logger.error(`Error sending unblock request email from ${userEmail}:`, error.message);
+        if (error.code === 'EAUTH') {
+          this.logger.error(
+            'Authentication failed. Please check your SMTP credentials. For Gmail, make sure you are using an App Password.',
+          );
+        }
+        throw error;
+      }
+    }
+
+    // Development mode: Log the email
+    this.logger.warn(
+      `[DEV MODE] Email service not configured. Unblock request email would be sent from ${userEmail} to ${supportEmail}`,
+    );
+    this.logger.warn(`[DEV MODE] Title: ${title}`);
+    this.logger.warn(`[DEV MODE] Message: ${message}`);
+  }
 }
 

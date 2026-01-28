@@ -1160,5 +1160,33 @@ export const helpApi = {
   },
 };
 
+export type UnblockRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface UnblockRequest {
+  id: string;
+  userId: string;
+  user?: User;
+  message: string;
+  status: UnblockRequestStatus;
+  decidedAt?: string;
+  decidedById?: string;
+  decidedBy?: User;
+  adminNote?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const unblockRequestApi = {
+  sendEmail: async (email: string, title: string, message: string): Promise<{ message: string }> => {
+    // Public endpoint - no auth required
+    const response = await axios.post(`${API_BASE_URL}/auth/unblock-request`, {
+      email,
+      title,
+      message,
+    });
+    return response.data;
+  },
+};
+
 export default api;
 

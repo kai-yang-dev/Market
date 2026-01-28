@@ -40,6 +40,8 @@ import { HelpRequest } from './entities/help-request.entity';
 import { FraudModule } from './fraud/fraud.module';
 import { FraudDetection } from './entities/fraud-detection.entity';
 import { ConversationReactivationRequest } from './entities/conversation-reactivation-request.entity';
+import { UnblockRequestModule } from './unblock-request/unblock-request.module';
+import { UnblockRequest } from './entities/unblock-request.entity';
 
 @Module({
   imports: [
@@ -79,6 +81,7 @@ import { ConversationReactivationRequest } from './entities/conversation-reactiv
           HelpRequest,
           FraudDetection,
           ConversationReactivationRequest,
+          UnblockRequest,
         ],
         synchronize: configService.get<boolean>('DB_SYNCHRONIZE', true), // Set to false in production
         logging: configService.get<boolean>('DB_LOGGING', false),
@@ -100,6 +103,7 @@ import { ConversationReactivationRequest } from './entities/conversation-reactiv
     ReferralModule,
     HelpModule,
     FraudModule,
+    UnblockRequestModule,
   ],
   controllers: [AppController],
   providers: [AppService],

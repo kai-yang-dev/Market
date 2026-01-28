@@ -107,5 +107,14 @@ export class AdminController {
   async transferRemainingTRX(@Param('walletId') walletId: string) {
     return this.adminService.transferRemainingTRXFromTempWallet(walletId);
   }
+
+  @UseGuards(AdminGuard)
+  @Post('users/:userId/status')
+  async updateUserStatus(
+    @Param('userId') userId: string,
+    @Body() body: { status: 'active' | 'blocked' },
+  ) {
+    return this.adminService.updateUserStatus(userId, body.status);
+  }
 }
 

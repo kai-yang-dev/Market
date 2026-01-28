@@ -16,7 +16,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Search, Mail, Calendar, DollarSign } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Search, Mail, Calendar, DollarSign, Ban, CheckCircle } from "lucide-react"
 import { showToast } from "../utils/toast"
 
 function Users() {
@@ -27,6 +36,13 @@ function Users() {
   const [totalPages, setTotalPages] = useState(1)
   const [total, setTotal] = useState(0)
   const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [statusChangeDialog, setStatusChangeDialog] = useState<{
+    userId: string;
+    userName: string;
+    currentStatus: string;
+    newStatus: 'active' | 'blocked';
+  } | null>(null)
+  const [changingStatus, setChangingStatus] = useState(false)
 
   useEffect(() => {
     setCurrentPage(1) // Reset to first page when filters or page size change
@@ -108,6 +124,33 @@ function Users() {
       return user.userName[0].toUpperCase()
     }
     return user.email[0].toUpperCase()
+  }
+
+  const handleStatusChangeClick = (userId: string, userName: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'active' ? 'blocked' : 'active'
+    setStatusChangeDialog({
+      userId,
+      userName,
+      currentStatus,
+      newStatus,
+    })
+  }
+
+  const handleStatusChange = async () => {
+    if (!statusChangeDialog) return
+
+    setChangingStatus(true)
+    try {
+      await adminApi.updateUserStatus(statusChangeDialog.userId, statusChangeDialog.newStatus)
+      showToast.success(`User status changed to ${statusChangeDialog.newStatus}`)
+      setStatusChangeDialog(null)
+      fetchUsers()
+    } catch (error: any) {
+      console.error('Failed to update user status:', error)
+      showToast.error(error.response?.data?.message || 'Failed to update user status')
+    } finally {
+      setChangingStatus(false)
+    }
   }
 
   return (
@@ -197,6 +240,7 @@ function Users() {
                     <TableHead>Total Spent</TableHead>
                     <TableHead>Password</TableHead>
                     <TableHead>Registered</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -271,6 +315,25 @@ function Users() {
                           {new Date(user.createdAt).toLocaleDateString()}
                         </div>
                       </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant={user.status === "active" ? "destructive" : "default"}
+                          size="sm"
+                          onClick={() => handleStatusChangeClick(user.id, getUserDisplayName(user), user.status)}
+                        >
+                          {user.status === "active" ? (
+                            <>
+                              <Ban className="h-4 w-4 mr-1" />
+                              Block
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Unblock
+                            </>
+                          )}
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -314,6 +377,35 @@ function Users() {
           </CardContent>
         )}
       </Card>
+
+      <Dialog open={!!statusChangeDialog} onOpenChange={(open) => !open && setStatusChangeDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change User Status</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to {statusChangeDialog?.newStatus === 'blocked' ? 'block' : 'unblock'} the user{" "}
+              <strong>{statusChangeDialog?.userName}</strong>?{" "}
+              {statusChangeDialog?.newStatus === 'blocked' && 'This will log them out immediately.'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setStatusChangeDialog(null)}
+              disabled={changingStatus}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleStatusChange}
+              disabled={changingStatus}
+              variant={statusChangeDialog?.newStatus === 'blocked' ? 'destructive' : 'default'}
+            >
+              {changingStatus ? 'Changing...' : statusChangeDialog?.newStatus === 'blocked' ? 'Block User' : 'Unblock User'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

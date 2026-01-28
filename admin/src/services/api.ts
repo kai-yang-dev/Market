@@ -28,6 +28,34 @@ export interface AdminSignInData {
 
 export type HelpRequestStatus = 'pending' | 'approved';
 export type ReactivationRequestStatus = 'pending' | 'approved' | 'rejected';
+export type UnblockRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface UnblockRequest {
+  id: string;
+  userId: string;
+  user?: {
+    id: string;
+    email: string;
+    userName?: string;
+    firstName?: string;
+    lastName?: string;
+    avatar?: string;
+  };
+  message: string;
+  status: UnblockRequestStatus;
+  decidedAt?: string;
+  decidedById?: string;
+  decidedBy?: {
+    id: string;
+    email: string;
+    userName?: string;
+    firstName?: string;
+    lastName?: string;
+  };
+  adminNote?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface HelpRequest {
   id: string;
@@ -289,6 +317,30 @@ export const adminApi = {
 
   rejectReactivationRequest: async (requestId: string) => {
     const response = await api.post(`/admin/fraud/reactivation-requests/${requestId}/reject`, {});
+    return response.data;
+  },
+
+  updateUserStatus: async (userId: string, status: 'active' | 'blocked') => {
+    const response = await api.post(`/admin/users/${userId}/status`, { status });
+    return response.data;
+  },
+
+  getUnblockRequests: async (params?: {
+    page?: number;
+    limit?: number;
+    status?: 'pending' | 'approved' | 'rejected';
+  }) => {
+    const response = await api.get('/unblock-requests', { params });
+    return response.data;
+  },
+
+  approveUnblockRequest: async (requestId: string, adminNote?: string) => {
+    const response = await api.post(`/unblock-requests/${requestId}/approve`, { adminNote });
+    return response.data;
+  },
+
+  rejectUnblockRequest: async (requestId: string, adminNote?: string) => {
+    const response = await api.post(`/unblock-requests/${requestId}/reject`, { adminNote });
     return response.data;
   },
 };
