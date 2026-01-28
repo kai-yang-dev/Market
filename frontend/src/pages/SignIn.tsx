@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { authApi } from '../services/api';
+import { authApi, unblockRequestApi } from '../services/api';
 import { useAppDispatch } from '../store/hooks';
 import { setCredentials } from '../store/slices/authSlice';
 import { showToast } from '../utils/toast';
@@ -17,6 +17,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { Loader2, ShieldCheck, Mail, Lock, Eye, EyeOff } from "lucide-react";
 
 function SignIn() {
@@ -36,6 +45,14 @@ function SignIn() {
   const [tempToken, setTempToken] = useState<string | null>(null);
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [twoFactorMethod, setTwoFactorMethod] = useState<'totp' | 'email'>('totp');
+  
+  // Unblock request state
+  const [showUnblockModal, setShowUnblockModal] = useState(false);
+  const [unblockTitle, setUnblockTitle] = useState('');
+  const [unblockMessage, setUnblockMessage] = useState('');
+  const [submittingUnblock, setSubmittingUnblock] = useState(false);
+  const [requestSubmitted, setRequestSubmitted] = useState(false);
+  const isBlocked = error === 'Your account is blocked';
 
   const redirectParam = searchParams.get("redirect")
   const redirectTo = (() => {
@@ -93,6 +110,32 @@ function SignIn() {
       showToast.error(errorMessage);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUnblockRequest = async () => {
+    if (!unblockTitle.trim()) {
+      showToast.error('Please enter a title');
+      return;
+    }
+    if (!unblockMessage.trim()) {
+      showToast.error('Please enter a message');
+      return;
+    }
+
+    setSubmittingUnblock(true);
+    try {
+      await unblockRequestApi.sendEmail(formData.email, unblockTitle.trim(), unblockMessage.trim());
+      showToast.success('Your request is submitted, support team will review within 24 hours');
+      setShowUnblockModal(false);
+      setUnblockTitle('');
+      setUnblockMessage('');
+      setRequestSubmitted(true); // Hide the button after submission
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.message || 'Failed to submit unblock request';
+      showToast.error(errorMessage);
+    } finally {
+      setSubmittingUnblock(false);
     }
   };
 
@@ -190,8 +233,19 @@ function SignIn() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md border border-destructive/20">
-                {error}
+              <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md border border-destructive/20 flex items-center justify-between gap-2">
+                <span>{error}</span>
+                {isBlocked && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowUnblockModal(true)}
+                    className="h-7 text-xs"
+                  >
+                    Request Unblock
+                  </Button>
+                )}
               </div>
             )}
             <div className="space-y-4">
@@ -270,6 +324,67 @@ function SignIn() {
           </div>
         </CardFooter>
       </Card>
+
+      <Dialog open={showUnblockModal} onOpenChange={setShowUnblockModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request Account Unblock</DialogTitle>
+            <DialogDescription>
+              Please provide a message explaining why your account should be unblocked. Our admin team will review your request.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="unblock-title">Title</Label>
+              <Input
+                id="unblock-title"
+                placeholder="Enter a title for your request..."
+                value={unblockTitle}
+                onChange={(e) => setUnblockTitle(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="unblock-message">Message</Label>
+              <Textarea
+                id="unblock-message"
+                placeholder="Please explain why your account should be unblocked..."
+                value={unblockMessage}
+                onChange={(e) => setUnblockMessage(e.target.value)}
+                rows={5}
+                className="resize-none"
+                required
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowUnblockModal(false);
+                setUnblockTitle('');
+                setUnblockMessage('');
+              }}
+              disabled={submittingUnblock}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUnblockRequest}
+              disabled={submittingUnblock || !unblockTitle.trim() || !unblockMessage.trim()}
+            >
+              {submittingUnblock ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                'Submit Request'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

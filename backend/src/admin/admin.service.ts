@@ -21,6 +21,7 @@ import { MilestoneService } from '../milestone/milestone.service';
 import { MilestoneStatus } from '../entities/milestone.entity';
 import { WalletService } from '../wallet/wallet.service';
 import { PolygonWalletService } from '../polygon-wallet/polygon-wallet.service';
+import { ChatGateway } from '../chat/chat.gateway';
 
 @Injectable()
 export class AdminService {
@@ -82,6 +83,8 @@ export class AdminService {
     @Inject(forwardRef(() => WalletService))
     private walletService: WalletService,
     private polygonWalletService: PolygonWalletService,
+    @Inject(forwardRef(() => ChatGateway))
+    private chatGateway: ChatGateway,
   ) {}
 
   async signIn(dto: AdminSignInDto) {
@@ -513,6 +516,29 @@ export class AdminService {
       trxTxHash: result.trxTxHash,
       amountTransferred: result.amountTransferred,
     };
+  }
+
+  async updateUserStatus(userId: string, status: 'active' | 'blocked'): Promise<User> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const oldStatus = user.status;
+    user.status = status;
+    await this.userRepository.save(user);
+
+    // If user is being blocked, emit logout event via WebSocket
+    if (status === 'blocked' && oldStatus !== 'blocked') {
+      this.chatGateway.server.to(`user:${userId}`).emit('account_blocked', {
+        message: 'Your account is blocked',
+      });
+    }
+
+    return user;
   }
 }
 

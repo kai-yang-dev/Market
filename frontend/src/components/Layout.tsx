@@ -228,28 +228,24 @@ function Layout({ children }: LayoutProps) {
       }
     }
 
-    const handleMessagesRead = () => {
-      // Refresh unread count when messages are read
-      fetchUnreadCount()
+    const handleAccountBlocked = (data: { message: string }) => {
+      disconnectSocket()
+      dispatch(logout())
+      showToast.error(data.message || 'Your account is blocked')
+      navigate('/signin')
     }
 
     socket.on('new_message', handleNewMessage)
     socket.on('balance_updated', handleBalanceUpdate)
     socket.on('new_notification', handleNewNotification)
-    socket.on('messages_read', handleMessagesRead)
-
-    // Listen for conversation viewed events to update unread count
-    const handleConversationViewed = () => {
-      fetchUnreadCount()
-    }
-    window.addEventListener('conversation-viewed', handleConversationViewed)
+    socket.on('account_blocked', handleAccountBlocked)
 
     return () => {
       if (socketRef.current) {
-        socketRef.current.off('new_message', handleNewMessage)
-        socketRef.current.off('balance_updated', handleBalanceUpdate)
-        socketRef.current.off('new_notification', handleNewNotification)
-        socketRef.current.off('messages_read', handleMessagesRead)
+      socketRef.current.off('new_message', handleNewMessage)
+      socketRef.current.off('balance_updated', handleBalanceUpdate)
+      socketRef.current.off('new_notification', handleNewNotification)
+      socketRef.current.off('account_blocked', handleAccountBlocked)
       }
       window.removeEventListener('conversation-viewed', handleConversationViewed)
     }

@@ -321,6 +321,11 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Only allow users with active status to sign in
+    if (user.status !== 'active') {
+      throw new UnauthorizedException('Your account is blocked');
+    }
+
     const isPasswordValid = await bcrypt.compare(dto.password, user.password);
 
     if (!isPasswordValid) {
@@ -379,7 +384,16 @@ export class AuthService {
         where: { id: payload.sub },
       });
 
-      if (!user || !user.twoFactorEnabled) {
+      if (!user) {
+        throw new BadRequestException('User not found');
+      }
+
+      // Prevent login for non-active users even if 2FA is enabled
+      if (user.status !== 'active') {
+        throw new UnauthorizedException('Your account is blocked');
+      }
+
+      if (!user.twoFactorEnabled) {
         throw new BadRequestException('2FA not enabled');
       }
 
@@ -601,6 +615,15 @@ export class AuthService {
     await this.userRepository.save(user);
 
     return this.getProfile(userId);
+  }
+
+  async sendUnblockRequestEmail(email: string, title: string, message: string) {
+    try {
+      await this.emailService.sendUnblockRequestEmail(email, title, message);
+      return { message: 'Unblock request email sent successfully' };
+    } catch (error) {
+      throw new BadRequestException('Failed to send unblock request email. Please try again later.');
+    }
   }
 }
 

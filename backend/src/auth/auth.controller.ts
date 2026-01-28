@@ -214,5 +214,10 @@ export class AuthController {
   ) {
     return this.authService.updateAvatar(req.user.id, file);
   }
+
+  @Post('unblock-request')
+  async sendUnblockRequest(@Body() dto: { email: string; title: string; message: string }) {
+    return this.authService.sendUnblockRequestEmail(dto.email, dto.title, dto.message);
+  }
 }
 

@@ -17,6 +17,7 @@ import Helps from './pages/Helps'
 import HelpDetail from './pages/HelpDetail'
 import Fraud from './pages/Fraud'
 import Users from './pages/Users'
+import Requests from './pages/Requests'
 import SignIn from './pages/SignIn'
 import Layout from './components/Layout'
 
@@ -156,6 +157,13 @@ function App() {
           <PrivateRoute>
             <Layout>
               <Users />
+            </Layout>
+          </PrivateRoute>
+        } />
+        <Route path="/requests" element={
+          <PrivateRoute>
+            <Layout>
+              <Requests />
             </Layout>
           </PrivateRoute>
         } />
