@@ -53,6 +53,7 @@ function SignUp() {
     lastName: '',
     middleName: '',
   });
+  const [usernameError, setUsernameError] = useState('');
 
   const [step5Data, setStep5Data] = useState({
     country: '',
@@ -149,12 +150,35 @@ function SignUp() {
     }
   };
 
+  const validateUsername = (username: string): string => {
+    if (username.toLowerCase().includes('gmail')) {
+      return 'Username should be proper display name, not including characters like "@, " ".';
+    }
+    if (username.includes('@')) {
+      return 'Username should be proper display name, not including characters like "@, " ".';
+    }
+    if (username.includes(' ')) {
+      return 'Username should be proper display name, not including characters like "@, " ".';
+    }
+    return '';
+  };
+
   const handleStep4 = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userId) return;
 
     setError('');
+    setUsernameError('');
     setLoading(true);
+
+    // Validate username
+    const usernameValidationError = validateUsername(step4Data.userName);
+    if (usernameValidationError) {
+      setUsernameError(usernameValidationError);
+      setError(usernameValidationError);
+      setLoading(false);
+      return;
+    }
 
     try {
       await authApi.signUpStep4(userId, step4Data);
@@ -349,8 +373,18 @@ function SignUp() {
                 minLength={3}
                 placeholder="Choose a public name"
                 value={step4Data.userName}
-                onChange={(e) => setStep4Data({ ...step4Data, userName: e.target.value })}
+                onChange={(e) => {
+                  const newUsername = e.target.value;
+                  setStep4Data({ ...step4Data, userName: newUsername });
+                  // Real-time validation
+                  const validationError = validateUsername(newUsername);
+                  setUsernameError(validationError);
+                }}
+                className={usernameError ? 'border-destructive' : ''}
               />
+              {usernameError && (
+                <p className="text-sm text-destructive mt-1">{usernameError}</p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
