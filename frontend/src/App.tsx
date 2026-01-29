@@ -38,7 +38,6 @@ import Support from "./pages/Support"
 
 function AppContent() {
   const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated)
-  const accessToken = useAppSelector((state) => state.auth.accessToken)
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
   const [isInitializing, setIsInitializing] = useState(true)
