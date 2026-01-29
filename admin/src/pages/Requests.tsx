@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CheckCircle2, XCircle, Mail, Calendar, MessageSquare } from "lucide-react"
 import {
   Dialog,
@@ -39,7 +39,6 @@ export default function Requests() {
   const [requests, setRequests] = useState<UnblockRequest[]>([])
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
   const [currentPage, setCurrentPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
   const [total, setTotal] = useState(0)
   const [itemsPerPage] = useState(20)
   const [actionDialog, setActionDialog] = useState<{
@@ -65,7 +64,6 @@ export default function Requests() {
       })
       setRequests(response.data)
       setTotal(response.total)
-      setTotalPages(response.totalPages)
     } catch (error: any) {
       console.error("Failed to fetch unblock requests:", error)
       showToast.error(error.response?.data?.message || "Failed to load unblock requests")
