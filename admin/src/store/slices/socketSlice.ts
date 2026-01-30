@@ -169,7 +169,7 @@ const socketSlice = createSlice({
     },
 
     // Clear state
-    clearSocketState: (state) => {
+    clearSocketState: () => {
       return initialState;
     },
   },
