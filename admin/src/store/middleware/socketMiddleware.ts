@@ -1,4 +1,4 @@
-import { Middleware } from '@reduxjs/toolkit';
+import { Middleware, AnyAction } from '@reduxjs/toolkit';
 import { io, Socket } from 'socket.io-client';
 import {
   socketConnecting,
@@ -61,7 +61,7 @@ const createSocket = (token: string): Socket => {
 
 const socketMiddleware: Middleware = (store) => {
   return (next) => (action) => {
-    const { type, payload } = action;
+    const { type, payload } = action as AnyAction;
 
     // Handle socket connect action
     if (type === SOCKET_CONNECT) {
