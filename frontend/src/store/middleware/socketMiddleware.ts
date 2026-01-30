@@ -59,8 +59,8 @@ const createSocket = (token: string): Socket => {
 };
 
 const socketMiddleware: Middleware = (store) => {
-  return (next) => (action: AnyAction) => {
-    const { type, payload } = action;
+  return (next) => (action) => {
+    const { type, payload } = action as AnyAction;
 
     // Handle socket connect action
     if (type === SOCKET_CONNECT) {
