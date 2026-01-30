@@ -114,8 +114,7 @@ function ChatList() {
       })
     }
 
-    // Remove any existing handler first to avoid duplicates
-    socket.off('new_message')
+    // Register the new_message handler
     socket.on('new_message', handleNewMessage)
 
     // Listen for user status changes
