@@ -1,3 +1,8 @@
+/**
+ * DEPRECATED: This file is kept for backward compatibility.
+ * New implementation uses Redux middleware.
+ * Please use socketService.ts and useSocket hook instead.
+ */
 import { io, Socket } from 'socket.io-client';
 
 let socket: Socket | null = null;
