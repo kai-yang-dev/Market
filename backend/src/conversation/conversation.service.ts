@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, ConflictException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Not, IsNull } from 'typeorm';
+import { Repository, Not, IsNull, Brackets } from 'typeorm';
 import { Conversation } from '../entities/conversation.entity';
 import { Service } from '../entities/service.entity';
 import { Message } from '../entities/message.entity';
@@ -32,6 +32,12 @@ export class ConversationService {
     private notificationService: NotificationService,
     private fraudService: FraudService,
   ) {}
+
+  private readonly publicUserFields = ['id', 'firstName', 'lastName', 'userName', 'avatar'];
+
+  private publicUserSelect(alias: string): string[] {
+    return this.publicUserFields.map((field) => `${alias}.${field}`);
+  }
 
   async create(userId: string, createConversationDto: CreateConversationDto): Promise<Conversation> {
     // Get the service to find the provider
@@ -99,14 +105,25 @@ export class ConversationService {
   }
 
   async findAll(userId: string): Promise<Conversation[]> {
-    const conversations = await this.conversationRepository.find({
-      where: [
-        { clientId: userId, deletedAt: null },
-        { providerId: userId, deletedAt: null },
-      ],
-      relations: ['service', 'client', 'provider', 'service.category'],
-      order: { updatedAt: 'DESC' },
-    });
+    const conversations = await this.conversationRepository
+      .createQueryBuilder('conversation')
+      .leftJoinAndSelect('conversation.service', 'service')
+      .leftJoinAndSelect('service.category', 'category')
+      .leftJoin('conversation.client', 'client')
+      .leftJoin('conversation.provider', 'provider')
+      .addSelect([
+        ...this.publicUserSelect('client'),
+        ...this.publicUserSelect('provider'),
+      ])
+      .where('conversation.deletedAt IS NULL')
+      .andWhere(
+        new Brackets((qb) => {
+          qb.where('conversation.clientId = :userId', { userId })
+            .orWhere('conversation.providerId = :userId', { userId });
+        }),
+      )
+      .orderBy('conversation.updatedAt', 'DESC')
+      .getMany();
 
     // Get unread counts for each conversation
     const unreadCounts = await Promise.all(
@@ -132,11 +149,23 @@ export class ConversationService {
   }
 
   async findOne(id: string, userId?: string, isAdmin: boolean = false): Promise<Conversation> {
-    const conversation = await this.conversationRepository.findOne({
-      where: { id, deletedAt: null },
-      relations: ['service', 'client', 'provider', 'service.category', 'messages', 'messages.sender'],
-      order: { messages: { createdAt: 'ASC' } },
-    });
+    const conversation = await this.conversationRepository
+      .createQueryBuilder('conversation')
+      .leftJoinAndSelect('conversation.service', 'service')
+      .leftJoinAndSelect('service.category', 'category')
+      .leftJoin('conversation.client', 'client')
+      .leftJoin('conversation.provider', 'provider')
+      .leftJoinAndSelect('conversation.messages', 'messages')
+      .leftJoin('messages.sender', 'sender')
+      .addSelect([
+        ...this.publicUserSelect('client'),
+        ...this.publicUserSelect('provider'),
+        ...this.publicUserSelect('sender'),
+      ])
+      .where('conversation.id = :id', { id })
+      .andWhere('conversation.deletedAt IS NULL')
+      .orderBy('messages.createdAt', 'ASC')
+      .getOne();
 
     if (!conversation) {
       throw new NotFoundException('Conversation not found');
@@ -174,14 +203,19 @@ export class ConversationService {
   }
 
   async findByServiceId(serviceId: string, userId: string): Promise<Conversation | null> {
-    return this.conversationRepository.findOne({
-      where: {
-        serviceId,
-        clientId: userId,
-        deletedAt: null,
-      },
-      relations: ['service', 'client', 'provider'],
-    });
+    return this.conversationRepository
+      .createQueryBuilder('conversation')
+      .leftJoinAndSelect('conversation.service', 'service')
+      .leftJoin('conversation.client', 'client')
+      .leftJoin('conversation.provider', 'provider')
+      .addSelect([
+        ...this.publicUserSelect('client'),
+        ...this.publicUserSelect('provider'),
+      ])
+      .where('conversation.serviceId = :serviceId', { serviceId })
+      .andWhere('conversation.clientId = :userId', { userId })
+      .andWhere('conversation.deletedAt IS NULL')
+      .getOne();
   }
 
   async findByServiceIdAsProvider(serviceId: string, providerId: string): Promise<Conversation[]> {
@@ -194,25 +228,29 @@ export class ConversationService {
       throw new ForbiddenException('You are not the provider of this service');
     }
 
-    const conversations = await this.conversationRepository.find({
-      where: {
-        serviceId,
-        providerId,
-        deletedAt: null,
-      },
-      relations: ['client', 'service'],
-      order: { updatedAt: 'DESC' },
-    });
+    const conversations = await this.conversationRepository
+      .createQueryBuilder('conversation')
+      .leftJoinAndSelect('conversation.service', 'service')
+      .leftJoin('conversation.client', 'client')
+      .addSelect(this.publicUserSelect('client'))
+      .where('conversation.serviceId = :serviceId', { serviceId })
+      .andWhere('conversation.providerId = :providerId', { providerId })
+      .andWhere('conversation.deletedAt IS NULL')
+      .orderBy('conversation.updatedAt', 'DESC')
+      .getMany();
 
     // Load last message for each conversation
     const conversationsWithMessages = await Promise.all(
       conversations.map(async (conversation) => {
-        const messages = await this.messageRepository.find({
-          where: { conversationId: conversation.id, deletedAt: null },
-          order: { createdAt: 'DESC' },
-          take: 1,
-          relations: ['sender'],
-        });
+        const messages = await this.messageRepository
+          .createQueryBuilder('message')
+          .leftJoin('message.sender', 'sender')
+          .addSelect(this.publicUserSelect('sender'))
+          .where('message.conversationId = :conversationId', { conversationId: conversation.id })
+          .andWhere('message.deletedAt IS NULL')
+          .orderBy('message.createdAt', 'DESC')
+          .take(1)
+          .getMany();
         return {
           ...conversation,
           messages: messages || [],
@@ -225,11 +263,19 @@ export class ConversationService {
 
   async findDisputed(): Promise<Array<Conversation & { disputedMilestones: any[] }>> {
     // Find all milestones with dispute status
-    const disputedMilestones = await this.milestoneRepository.find({
-      where: { status: MilestoneStatus.DISPUTE, deletedAt: null },
-      relations: ['client', 'provider', 'service'],
-      order: { createdAt: 'DESC' },
-    });
+    const disputedMilestones = await this.milestoneRepository
+      .createQueryBuilder('milestone')
+      .leftJoin('milestone.client', 'client')
+      .leftJoin('milestone.provider', 'provider')
+      .leftJoinAndSelect('milestone.service', 'service')
+      .addSelect([
+        ...this.publicUserSelect('client'),
+        ...this.publicUserSelect('provider'),
+      ])
+      .where('milestone.status = :status', { status: MilestoneStatus.DISPUTE })
+      .andWhere('milestone.deletedAt IS NULL')
+      .orderBy('milestone.createdAt', 'DESC')
+      .getMany();
 
     if (disputedMilestones.length === 0) {
       return [];

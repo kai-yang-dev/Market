@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like, In } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Service, ServicePaymentDuration, ServiceStatus } from '../entities/service.entity';
 import { Tag } from '../entities/tag.entity';
 import { Milestone, MilestoneStatus } from '../entities/milestone.entity';
@@ -21,6 +21,12 @@ export class ServiceService {
     @Inject(forwardRef(() => NotificationService))
     private notificationService: NotificationService,
   ) {}
+
+  private readonly publicUserFields = ['id', 'firstName', 'lastName', 'userName', 'avatar'];
+
+  private publicUserSelect(alias: string): string[] {
+    return this.publicUserFields.map((field) => `${alias}.${field}`);
+  }
 
   async create(
     userId: string,
@@ -74,8 +80,9 @@ export class ServiceService {
     const queryBuilder = this.serviceRepository
       .createQueryBuilder('service')
       .leftJoinAndSelect('service.category', 'category')
-      .leftJoinAndSelect('service.user', 'user')
+      .leftJoin('service.user', 'user')
       .leftJoinAndSelect('service.tags', 'tags')
+      .addSelect(this.publicUserSelect('user'))
       .where('service.deletedAt IS NULL');
 
     if (userId) {
@@ -125,10 +132,15 @@ export class ServiceService {
 
     // Calculate averageRating from milestones for each service
     const serviceIds = data.map((s) => s.id);
-    const allMilestones = await this.milestoneRepository.find({
-      where: { serviceId: In(serviceIds), deletedAt: null },
-      relations: ['client'],
-    });
+    const allMilestones = serviceIds.length === 0
+      ? []
+      : await this.milestoneRepository
+          .createQueryBuilder('milestone')
+          .leftJoin('milestone.client', 'client')
+          .addSelect(this.publicUserSelect('client'))
+          .where('milestone.serviceId IN (:...serviceIds)', { serviceIds })
+          .andWhere('milestone.deletedAt IS NULL')
+          .getMany();
 
     // Group milestones by serviceId and calculate averageRating
     const serviceRatings = new Map<string, { sum: number; count: number }>();
@@ -194,20 +206,28 @@ export class ServiceService {
     feedbacksPage: number;
     feedbacksLimit: number;
   }> {
-    const service = await this.serviceRepository.findOne({
-      where: { id, deletedAt: null },
-      relations: ['category', 'user', 'tags'],
-    });
+    const service = await this.serviceRepository
+      .createQueryBuilder('service')
+      .leftJoinAndSelect('service.category', 'category')
+      .leftJoin('service.user', 'user')
+      .leftJoinAndSelect('service.tags', 'tags')
+      .addSelect(this.publicUserSelect('user'))
+      .where('service.id = :id', { id })
+      .andWhere('service.deletedAt IS NULL')
+      .getOne();
 
     if (!service) {
       throw new NotFoundException(`Service with ID ${id} not found`);
     }
 
     // Get all milestones for this service
-    const allMilestones = await this.milestoneRepository.find({
-      where: { serviceId: id, deletedAt: null },
-      relations: ['client'],
-    });
+    const allMilestones = await this.milestoneRepository
+      .createQueryBuilder('milestone')
+      .leftJoin('milestone.client', 'client')
+      .addSelect(this.publicUserSelect('client'))
+      .where('milestone.serviceId = :serviceId', { serviceId: id })
+      .andWhere('milestone.deletedAt IS NULL')
+      .getMany();
 
     // Calculate statistics
     const totalMilestones = allMilestones.length;

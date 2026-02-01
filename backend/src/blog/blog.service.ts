@@ -29,6 +29,12 @@ export class BlogService {
     private postReportRepository: Repository<PostReport>,
   ) {}
 
+  private readonly publicUserFields = ['id', 'firstName', 'lastName', 'userName', 'avatar'];
+
+  private publicUserSelect(alias: string): string[] {
+    return this.publicUserFields.map((field) => `${alias}.${field}`);
+  }
+
   async create(userId: string, createPostDto: CreatePostDto): Promise<Post> {
     // Ensure images is always an array, even if empty
     const images = Array.isArray(createPostDto.images) ? createPostDto.images : [];
@@ -87,10 +93,14 @@ export class BlogService {
   ): Promise<{ data: Post[]; total: number; page: number; limit: number; totalPages: number }> {
     const queryBuilder = this.postRepository
       .createQueryBuilder('post')
-      .leftJoinAndSelect('post.user', 'user')
+      .leftJoin('post.user', 'user')
       .leftJoinAndSelect('post.likes', 'likes')
       .leftJoinAndSelect('post.comments', 'comments')
-      .leftJoinAndSelect('comments.user', 'commentUser')
+      .leftJoin('comments.user', 'commentUser')
+      .addSelect([
+        ...this.publicUserSelect('user'),
+        ...this.publicUserSelect('commentUser'),
+      ])
       .where('post.status = :status', { status: PostStatus.PUBLISHED });
 
     if (search) {
@@ -175,10 +185,14 @@ export class BlogService {
   ): Promise<{ data: Post[]; total: number; page: number; limit: number; totalPages: number }> {
     const queryBuilder = this.postRepository
       .createQueryBuilder('post')
-      .leftJoinAndSelect('post.user', 'user')
+      .leftJoin('post.user', 'user')
       .leftJoinAndSelect('post.likes', 'likes')
       .leftJoinAndSelect('post.comments', 'comments')
-      .leftJoinAndSelect('comments.user', 'commentUser')
+      .leftJoin('comments.user', 'commentUser')
+      .addSelect([
+        ...this.publicUserSelect('user'),
+        ...this.publicUserSelect('commentUser'),
+      ])
       .orderBy('post.createdAt', 'DESC');
 
     if (status) {
@@ -239,10 +253,24 @@ export class BlogService {
   }
 
   async findOne(id: string, userId?: string): Promise<Post> {
-    const post = await this.postRepository.findOne({
-      where: { id, status: PostStatus.PUBLISHED },
-      relations: ['user', 'likes', 'likes.user', 'comments', 'comments.user', 'comments.replies', 'comments.replies.user'],
-    });
+    const post = await this.postRepository
+      .createQueryBuilder('post')
+      .leftJoin('post.user', 'user')
+      .leftJoinAndSelect('post.likes', 'likes')
+      .leftJoin('likes.user', 'likeUser')
+      .leftJoinAndSelect('post.comments', 'comments')
+      .leftJoin('comments.user', 'commentUser')
+      .leftJoinAndSelect('comments.replies', 'replies')
+      .leftJoin('replies.user', 'replyUser')
+      .addSelect([
+        ...this.publicUserSelect('user'),
+        ...this.publicUserSelect('likeUser'),
+        ...this.publicUserSelect('commentUser'),
+        ...this.publicUserSelect('replyUser'),
+      ])
+      .where('post.id = :id', { id })
+      .andWhere('post.status = :status', { status: PostStatus.PUBLISHED })
+      .getOne();
 
     if (!post) {
       throw new NotFoundException(`Post with ID ${id} not found`);
@@ -416,20 +444,31 @@ export class BlogService {
     const saved = await this.postCommentRepository.save(comment);
 
     // Return with user relation so frontend can display commenter immediately
-    const withUser = await this.postCommentRepository.findOne({
-      where: { id: saved.id },
-      relations: ['user'],
-    });
+    const sanitized = await this.postCommentRepository
+      .createQueryBuilder('comment')
+      .leftJoin('comment.user', 'user')
+      .addSelect(this.publicUserSelect('user'))
+      .where('comment.id = :id', { id: saved.id })
+      .getOne();
 
-    return withUser as PostComment;
+    return (sanitized || saved) as PostComment;
   }
 
   async getComments(postId: string, userId?: string): Promise<PostComment[]> {
-    const comments = await this.postCommentRepository.find({
-      where: { postId, parentId: null },
-      relations: ['user', 'replies', 'replies.user', 'likes'],
-      order: { createdAt: 'DESC' },
-    });
+    const comments = await this.postCommentRepository
+      .createQueryBuilder('comment')
+      .leftJoin('comment.user', 'user')
+      .leftJoinAndSelect('comment.replies', 'replies')
+      .leftJoin('replies.user', 'replyUser')
+      .leftJoinAndSelect('comment.likes', 'likes')
+      .addSelect([
+        ...this.publicUserSelect('user'),
+        ...this.publicUserSelect('replyUser'),
+      ])
+      .where('comment.postId = :postId', { postId })
+      .andWhere('comment.parentId IS NULL')
+      .orderBy('comment.createdAt', 'DESC')
+      .getMany();
 
     return Promise.all(
       comments.map(async (comment) => {
@@ -503,7 +542,8 @@ export class BlogService {
     const queryBuilder = this.postReportRepository
       .createQueryBuilder('report')
       .leftJoinAndSelect('report.post', 'post')
-      .leftJoinAndSelect('report.user', 'user')
+      .leftJoin('report.user', 'user')
+      .addSelect(this.publicUserSelect('user'))
       .orderBy('report.createdAt', 'DESC');
 
     if (status) {
@@ -535,10 +575,13 @@ export class BlogService {
     report.resolutionNote = updateReportStatusDto.resolutionNote;
     await this.postReportRepository.save(report);
 
-    const updated = await this.postReportRepository.findOne({
-      where: { id: reportId },
-      relations: ['post', 'user'],
-    });
+    const updated = await this.postReportRepository
+      .createQueryBuilder('report')
+      .leftJoinAndSelect('report.post', 'post')
+      .leftJoin('report.user', 'user')
+      .addSelect(this.publicUserSelect('user'))
+      .where('report.id = :reportId', { reportId })
+      .getOne();
 
     if (!updated) {
       throw new NotFoundException('Report not found after update');
