@@ -23,6 +23,12 @@ export class MessageService {
     private fraudService: FraudService,
   ) {}
 
+  private readonly publicUserFields = ['id', 'firstName', 'lastName', 'userName', 'avatar'];
+
+  private publicUserSelect(alias: string): string[] {
+    return this.publicUserFields.map((field) => `${alias}.${field}`);
+  }
+
   async create(conversationId: string, userId: string, createMessageDto: CreateMessageDto, isAdmin: boolean = false): Promise<Message> {
     // Verify conversation exists and user has access
     const conversation = await this.conversationRepository.findOne({
@@ -204,7 +210,8 @@ export class MessageService {
       .createQueryBuilder('message')
       .where('message.conversationId = :conversationId', { conversationId })
       .andWhere('message.deletedAt IS NULL')
-      .leftJoinAndSelect('message.sender', 'sender')
+      .leftJoin('message.sender', 'sender')
+      .addSelect(this.publicUserSelect('sender'))
       .orderBy('message.createdAt', 'DESC')
       .take(limit + 1); // Fetch one extra to check if there are more
 
@@ -260,10 +267,14 @@ export class MessageService {
   }
 
   async findOne(id: string): Promise<Message> {
-    const message = await this.messageRepository.findOne({
-      where: { id, deletedAt: null },
-      relations: ['sender', 'conversation'],
-    });
+    const message = await this.messageRepository
+      .createQueryBuilder('message')
+      .leftJoinAndSelect('message.conversation', 'conversation')
+      .leftJoin('message.sender', 'sender')
+      .addSelect(this.publicUserSelect('sender'))
+      .where('message.id = :id', { id })
+      .andWhere('message.deletedAt IS NULL')
+      .getOne();
 
     if (!message) {
       throw new NotFoundException('Message not found');
