@@ -1,6 +1,11 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { Toaster } from "@/components/ui/toaster"
-import { useAppSelector } from './store/hooks'
+import { useAppSelector, useAppDispatch } from './store/hooks'
+import { logout } from './store/slices/authSlice'
+import { disconnectSocket as disconnectOldSocket } from './services/socket'
+import { disconnectSocket as disconnectNewSocket } from './services/socketService'
+import { showToast } from './utils/toast'
 import Dashboard from './pages/Dashboard'
 import Categories from './pages/Categories'
 import CategoryForm from './pages/CategoryForm'
@@ -32,11 +37,41 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return !isAuthenticated ? <>{children}</> : <Navigate to="/" replace />
 }
 
-function App() {
+function AppContent() {
+  const dispatch = useAppDispatch()
+  const navigate = useNavigate()
+
+  // Handle auth expiration events globally
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      // Disconnect all socket connections
+      try {
+        disconnectOldSocket()
+      } catch (error) {
+        console.warn('Error disconnecting old socket:', error)
+      }
+      try {
+        disconnectNewSocket()
+      } catch (error) {
+        console.warn('Error disconnecting new socket:', error)
+      }
+      
+      // Clear auth state
+      dispatch(logout())
+      
+      // Show notification
+      showToast.info('Your session expired. Please sign in again.')
+      
+      // Navigate to sign in page
+      navigate('/signin')
+    }
+
+    window.addEventListener('auth-expired', handleAuthExpired as any)
+    return () => window.removeEventListener('auth-expired', handleAuthExpired as any)
+  }, [dispatch, navigate])
+
   return (
-    <>
-      <Router>
-        <Routes>
+    <Routes>
         <Route path="/signin" element={
           <PublicRoute>
             <SignIn />
@@ -175,7 +210,15 @@ function App() {
             </Layout>
           </PrivateRoute>
         } />
-        </Routes>
+    </Routes>
+  )
+}
+
+function App() {
+  return (
+    <>
+      <Router>
+        <AppContent />
       </Router>
       <Toaster />
     </>
