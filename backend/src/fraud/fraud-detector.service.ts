@@ -93,7 +93,8 @@ You are a fraud detection engine for a real-time chat platform.
     - Any conversation that stays fully on-platform
     - Any content unrelated to external communication or external payment
     - when the content relates to payment, unless it is direct wallet address or direct outside payment request. make the confidence low.(in the case of bank address, it can be created for customer. consider carefully) 
-
+    - if the content relates to call, like "caller" unless it is direct call request. make the confidence low.
+    
 Output format (exact):
 {"fraud": true|false, "category": "string or null", "reason": "short string or null", "confidence": "low|medium|high"}
 `.trim();

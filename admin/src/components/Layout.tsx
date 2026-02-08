@@ -2,6 +2,9 @@ import { ReactNode } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '../store/hooks'
 import { logout } from '../store/slices/authSlice'
+import { disconnectSocket as disconnectOldSocket } from '../services/socket'
+import { disconnectSocket as disconnectNewSocket } from '../services/socketService'
+import { showToast } from '../utils/toast'
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Separator } from "@/components/ui/separator"
@@ -49,7 +52,25 @@ function Layout({ children }: LayoutProps) {
   const user = useAppSelector((state) => state.auth.user)
 
   const handleLogout = () => {
+    // Disconnect all socket connections
+    try {
+      disconnectOldSocket()
+    } catch (error) {
+      console.warn('Error disconnecting old socket:', error)
+    }
+    try {
+      disconnectNewSocket()
+    } catch (error) {
+      console.warn('Error disconnecting new socket:', error)
+    }
+    
+    // Clear auth state and localStorage
     dispatch(logout())
+    
+    // Show notification
+    showToast.info('You have been logged out')
+    
+    // Navigate to sign in page
     navigate('/signin')
   }
 
