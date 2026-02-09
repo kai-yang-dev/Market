@@ -26,6 +26,7 @@ import { FraudService } from '../fraud/fraud.service';
 import { Conversation } from '../entities/conversation.entity';
 import { Message } from '../entities/message.entity';
 import { LoginHistory } from '../entities/login-history.entity';
+import { FraudDetection } from '../entities/fraud-detection.entity';
 import { parseUserAgent } from '../utils/user-agent-parser';
 import { getLocationFromIP } from '../utils/ip-geolocation';
 
@@ -624,6 +625,22 @@ export class AdminService {
       unreviewedCountMap.set(fc.conversation.id, fc.unreviewedCount || 0);
     });
 
+    // Get blocked messages count (high confidence fraud) for each conversation
+    const blockedMessagesData = await this.dataSource
+      .getRepository(FraudDetection)
+      .createQueryBuilder('fraud')
+      .select('fraud.conversationId', 'conversationId')
+      .addSelect('COUNT(fraud.id)', 'blockedCount')
+      .where('fraud.conversationId IN (:...ids)', { ids: conversationIds })
+      .andWhere('fraud.confidence = :confidence', { confidence: 'high' })
+      .groupBy('fraud.conversationId')
+      .getRawMany();
+
+    const blockedCountMap = new Map<string, number>();
+    blockedMessagesData.forEach((item) => {
+      blockedCountMap.set(item.conversationId, parseInt(item.blockedCount, 10));
+    });
+
     // Format the data with message counts
     const formattedData = conversations.map((conv) => {
       const messageCount = countMap.get(conv.id) || 0;
@@ -674,6 +691,7 @@ export class AdminService {
         createdAt: conv.createdAt,
         updatedAt: conv.updatedAt,
         unreviewedFraudCount: unreviewedCountMap.get(conv.id) || 0,
+        blockedMessagesCount: blockedCountMap.get(conv.id) || 0,
       };
     });
 
