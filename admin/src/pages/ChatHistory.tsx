@@ -74,6 +74,7 @@ interface ChatHistoryItem {
   blockedReason?: string
   messageCount: number
   unreviewedFraudCount?: number
+  blockedMessagesCount?: number
   lastMessage?: {
     id: string
     message: string
@@ -353,6 +354,12 @@ export default function ChatHistory() {
                             </Badge>
                           ) : (
                             <Badge variant="default">Active</Badge>
+                          )}
+                          {conv.blockedMessagesCount && conv.blockedMessagesCount > 0 && (
+                            <Badge variant="outline" className="bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700">
+                              <Ban className="h-3 w-3 mr-1" />
+                              {conv.blockedMessagesCount} message{conv.blockedMessagesCount > 1 ? 's' : ''} blocked
+                            </Badge>
                           )}
                           {conv.unreviewedFraudCount && conv.unreviewedFraudCount > 0 && (
                             <div className="flex items-center gap-1">

@@ -60,6 +60,8 @@ function Chat() {
     description: '',
     balance: '',
   })
+  const [creatingMilestone, setCreatingMilestone] = useState(false)
+  const createMilestoneTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const [showReleaseModal, setShowReleaseModal] = useState(false)
   const [releaseForm, setReleaseForm] = useState({
     milestoneId: '',
@@ -115,6 +117,15 @@ function Chat() {
     const msgById = new Map(messages.map((m) => [m.id, m] as const))
     return Array.from(selectedMessageIds).filter((id) => msgById.get(id)?.senderId === user.id)
   }, [selectedMessageIds, messages, user?.id])
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (createMilestoneTimeoutRef.current) {
+        clearTimeout(createMilestoneTimeoutRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     // Reset selection when switching conversations
@@ -1170,36 +1181,51 @@ function Chat() {
 
   const handleCreateMilestone = async () => {
     if (!conversation || !milestoneForm.title || !milestoneForm.description || !milestoneForm.balance) return
+    
+    // Prevent multiple submissions
+    if (creatingMilestone) return
 
-    try {
-      const amount = parseFloat(milestoneForm.balance)
-
-      // Create milestone
-      await milestoneApi.create(id!, {
-        serviceId: conversation.serviceId,
-        title: milestoneForm.title,
-        description: milestoneForm.description,
-        balance: amount,
-      })
-
-      showToast.success('Milestone created successfully!')
-
-      setMilestoneForm({ title: '', description: '', balance: '' })
-      setShowMilestoneForm(false)
-      await fetchMilestones()
-      await fetchMessages(50)
-      
-      // Emit milestone update via WebSocket
-      if (socketRef.current) {
-        socketRef.current.emit('milestone_updated', { conversationId: id })
-      }
-      
-      // Notify Layout to refresh balance (client's balance decreased)
-      window.dispatchEvent(new CustomEvent('balance-updated'))
-    } catch (error: any) {
-      console.error('Failed to create milestone:', error)
-      showToast.error(error.message || 'Failed to create milestone. Please try again.')
+    // Clear any existing timeout
+    if (createMilestoneTimeoutRef.current) {
+      clearTimeout(createMilestoneTimeoutRef.current)
     }
+
+    // Set debounce timeout
+    createMilestoneTimeoutRef.current = setTimeout(async () => {
+      try {
+        setCreatingMilestone(true)
+        const amount = parseFloat(milestoneForm.balance)
+
+        // Create milestone
+        await milestoneApi.create(id!, {
+          serviceId: conversation.serviceId,
+          title: milestoneForm.title,
+          description: milestoneForm.description,
+          balance: amount,
+        })
+
+        showToast.success('Milestone created successfully!')
+
+        setMilestoneForm({ title: '', description: '', balance: '' })
+        setShowMilestoneForm(false)
+        await fetchMilestones()
+        await fetchMessages(50)
+        
+        // Emit milestone update via WebSocket
+        if (socketRef.current) {
+          socketRef.current.emit('milestone_updated', { conversationId: id })
+        }
+        
+        // Notify Layout to refresh balance (client's balance decreased)
+        window.dispatchEvent(new CustomEvent('balance-updated'))
+      } catch (error: any) {
+        console.error('Failed to create milestone:', error)
+        showToast.error(error.message || 'Failed to create milestone. Please try again.')
+      } finally {
+        setCreatingMilestone(false)
+        createMilestoneTimeoutRef.current = null
+      }
+    }, 300) // 300ms debounce delay
   }
 
   const handleMilestoneAction = async (milestoneId: string, action: string) => {
@@ -2491,9 +2517,17 @@ function Chat() {
                         <Button
                           type="button"
                           onClick={handleCreateMilestone}
-                          disabled={!milestoneForm.title || !milestoneForm.description || !milestoneForm.balance}
+                          disabled={!milestoneForm.title || !milestoneForm.description || !milestoneForm.balance || creatingMilestone}
+                          className="gap-2"
                         >
-                          Create milestone
+                          {creatingMilestone ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Creating...
+                            </>
+                          ) : (
+                            'Create milestone'
+                          )}
                         </Button>
                       </DialogFooter>
                     </DialogContent>
