@@ -123,6 +123,12 @@ function Home() {
     )
   }, [isAuthenticated])
 
+  // Helper function to round to nearest multiple of 10
+  const roundToNearestTen = (value: number | null): number => {
+    if (value === null || value === 0) return 0
+    return Math.round(value / 10) * 10
+  }
+
   const benefits = [
     {
       icon: ShieldCheck,
@@ -313,24 +319,24 @@ function Home() {
                 value: loadingStats 
                   ? "..." 
                   : statistics.activeUsers !== null 
-                    ? statistics.activeUsers.toLocaleString() 
-                    : "0" 
+                    ? `${roundToNearestTen(statistics.activeUsers).toLocaleString()}+` 
+                    : "0+" 
               },
               { 
                 label: "Listings", 
                 value: loadingStats 
                   ? "..." 
                   : statistics.listings !== null 
-                    ? statistics.listings.toLocaleString() 
-                    : "0" 
+                    ? `${roundToNearestTen(statistics.listings).toLocaleString()}+` 
+                    : "0+" 
               },
               { 
                 label: "Verified sellers", 
                 value: loadingStats 
                   ? "..." 
                   : statistics.verifiedSellers !== null 
-                    ? statistics.verifiedSellers.toLocaleString() 
-                    : "0" 
+                    ? `${roundToNearestTen(statistics.verifiedSellers).toLocaleString()}+` 
+                    : "0+" 
               },
               { 
                 label: "Satisfaction", 
